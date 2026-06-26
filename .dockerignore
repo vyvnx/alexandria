@@ -1,0 +1,20 @@
+# keep build context small + reproducible
+.git/
+.venv/
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+node_modules/
+**/node_modules/
+**/dist/
+.turbo/
+**/.turbo/
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+docs/
+README.md

@@ -1,0 +1,87 @@
+/* Shared domain + wire types. The *only* place that mirrors the JSON API shape
+   (design spec §8, frontend-architecture §15). Keep in sync with apps/api. */
+
+export type NodeId = string; // string app-side; the API uses ints — we stringify
+export type EdgeId = string;
+
+export const NODE_KINDS = ["source", "entity", "concept"] as const;
+export type NodeKind = (typeof NODE_KINDS)[number];
+
+export const TYPED_EDGES = [
+  "mentions",
+  "about",
+  "uses",
+  "extends",
+  "contradicts",
+  "authored-by",
+] as const;
+export const SEMANTIC_EDGE = "similar-to";
+export const EDGE_TYPES = [...TYPED_EDGES, SEMANTIC_EDGE] as const;
+export type EdgeType = (typeof EDGE_TYPES)[number];
+
+export const isSemantic = (type: string): boolean => type === SEMANTIC_EDGE;
+
+/* ── Wire shapes (exactly what the API returns) ─────────────────────────── */
+
+export interface WireNode {
+  id: number;
+  kind: NodeKind;
+  name: string;
+  data: Record<string, unknown>;
+}
+
+export interface WireEdge {
+  src: number;
+  dst: number;
+  type: EdgeType;
+  weight: number | null;
+}
+
+export interface GraphResponse {
+  nodes: WireNode[];
+  edges: WireEdge[];
+}
+
+export interface SearchHit {
+  id: number;
+  kind: NodeKind;
+  name: string;
+  score: number | null;
+}
+
+export interface NeighborEntry {
+  node: WireNode;
+  edge: { type: EdgeType; weight: number | null; evidence: string | null };
+}
+
+export interface SourceDetail {
+  url: string | null;
+  author: string | null;
+  published_at: string | null;
+  summary: string | null;
+  my_note: string | null;
+  raw_text?: string | null;
+}
+
+export interface NodeDetail {
+  node: WireNode;
+  source: SourceDetail | null;
+  neighbors: NeighborEntry[];
+}
+
+export interface IngestResult {
+  source_id: number;
+  title: string;
+  summary: string;
+  nodes_added: number;
+  nodes_reused: number;
+  typed_edges_added: number;
+  similar_edges_added: number;
+  node_ids: number[];
+}
+
+export interface Health {
+  ok: boolean;
+  vec: boolean;
+  llm: string;
+}

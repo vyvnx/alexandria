@@ -1,0 +1,28 @@
+# data & secrets — never commit
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+docs/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# node / frontend
+node_modules/
+dist/
+.vite/
+
+# monorepo task runner
+.turbo/
+
+# os / editor
+.DS_Store
+*.swp

@@ -1,0 +1,43 @@
+# Local orchestration of the independently-deployable services.
+# Each app builds its own image from the repo-root context (see apps/*/Dockerfile).
+#   docker compose up --build
+#
+# Note: in v1 the API embeds the engine in-process, so `api` runs standalone.
+# The `engine` service is the seam for splitting ML/GPU compute onto its own box;
+# point the API at it over HTTP when that wiring lands.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      ALEX_LLM: ${ALEX_LLM:-fake}
+      ALEX_DB_PATH: /data/alexandria.db
+      ALEX_OPENAI_API_KEY: ${ALEX_OPENAI_API_KEY:-}
+    volumes:
+      - alexandria-data:/data
+
+  engine:
+    build:
+      context: .
+      dockerfile: apps/engine/Dockerfile
+    ports:
+      - "8100:8100"
+    environment:
+      ALEX_LLM: ${ALEX_LLM:-fake}
+      ALEX_OPENAI_API_KEY: ${ALEX_OPENAI_API_KEY:-}
+    volumes:
+      - alexandria-data:/data
+    # --- GPU: uncomment to expose the host NVIDIA GPU to the engine ---
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  alexandria-data:

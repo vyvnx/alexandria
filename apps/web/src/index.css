@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Alexandria — celestial-atlas theme (design spec §10), expressed as Tailwind
+   theme tokens. Colors here become `bg-*` / `text-*` / `border-*` utilities;
+   fonts become `font-*`; animations become `animate-*`; easings become `ease-*`.
+   ──────────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-void: #0c1030;
+  --color-void-2: #0a0d28;
+  --color-panel: #141a40;
+  --color-panel-2: #11163a;
+  --color-line: #2a3168;
+  --color-vellum: #ece4d2;
+  --color-vellum-dim: #9a957f;
+  --color-brass: #cba34c;
+  --color-brass-bright: #e8c879;
+  --color-starlight: #7fe3d6;
+  --color-rose: #e0897c;
+
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --animate-reveal: reveal 360ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  --animate-rise: rise 360ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    @apply bg-void text-vellum font-body antialiased;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-starlight) 16%, transparent);
+  }
+}
+
+@layer components {
+  /* Floating glass panel over the star field. */
+  .panel {
+    @apply rounded-[10px] border backdrop-blur-md;
+    border-color: color-mix(in srgb, var(--color-line) 80%, transparent);
+    background: linear-gradient(
+      color-mix(in srgb, var(--color-panel) 78%, transparent),
+      color-mix(in srgb, var(--color-void-2) 70%, transparent)
+    );
+    box-shadow:
+      0 18px 50px -28px #000,
+      inset 0 2px 0 0 color-mix(in srgb, var(--color-brass) 18%, transparent);
+  }
+
+  .eyebrow {
+    @apply font-mono text-[0.72rem] uppercase tracking-[0.22em] text-brass;
+  }
+
+  .control {
+    @apply bg-void-2 text-vellum w-full rounded-md border px-2.5 py-2 transition;
+    border-color: var(--color-line);
+  }
+  .control::placeholder {
+    color: color-mix(in srgb, var(--color-vellum-dim) 80%, transparent);
+  }
+  .control:focus {
+    @apply outline-none;
+    border-color: var(--color-starlight);
+    box-shadow:
+      0 0 0 1px var(--color-starlight),
+      0 0 18px -4px var(--color-starlight);
+  }
+
+  .btn {
+    @apply bg-panel inline-flex items-center justify-center gap-1.5 rounded-md border px-3.5 py-2 transition active:translate-y-px;
+    border-color: var(--color-line);
+  }
+  .btn:hover {
+    border-color: var(--color-brass);
+  }
+  .btn:disabled {
+    @apply cursor-not-allowed opacity-50 active:translate-y-0;
+  }
+  .btn-primary {
+    border-color: color-mix(in srgb, var(--color-starlight) 55%, var(--color-line));
+    background: color-mix(in srgb, var(--color-starlight) 16%, var(--color-panel));
+  }
+  .btn-primary:hover {
+    border-color: var(--color-starlight);
+    background: color-mix(in srgb, var(--color-starlight) 26%, var(--color-panel));
+  }
+
+  /* Legend marks. */
+  .swatch {
+    @apply inline-block size-3 flex-none rounded-full;
+    box-shadow: 0 0 8px -1px currentColor;
+  }
+  .dash {
+    @apply inline-block w-4 flex-none border-t-2;
+  }
+  .dash-dotted {
+    border-top-style: dotted;
+  }
+
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-line) 70%, transparent) transparent;
+  }
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-line) 80%, transparent);
+    border-radius: 9999px;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-brass) 45%, var(--color-line));
+  }
+
+  /* The void with an atlas vignette + a barely-there equatorial grid. */
+  .app-bg {
+    background: radial-gradient(
+      120% 120% at 50% 38%,
+      var(--color-void) 0%,
+      var(--color-void-2) 70%,
+      #07091d 100%
+    );
+  }
+  .masthead-bg {
+    background: linear-gradient(color-mix(in srgb, var(--color-void-2) 70%, transparent), transparent);
+  }
+  .statusbar-bg {
+    background: linear-gradient(transparent, color-mix(in srgb, var(--color-void-2) 70%, transparent));
+  }
+  .atlas-grid {
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--color-line) 80%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--color-line) 80%, transparent) 1px, transparent 1px);
+    background-size: 140px 140px;
+    opacity: 0.1;
+    -webkit-mask-image: radial-gradient(120% 90% at 50% 40%, #000 35%, transparent 78%);
+    mask-image: radial-gradient(120% 90% at 50% 40%, #000 35%, transparent 78%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

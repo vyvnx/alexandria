@@ -1,0 +1,14 @@
+# Alexandria — uv workspace root (virtual; defines members, shared lockfile, dev tooling).
+# One uv.lock + one .venv for every Python package under apps/* and packages/*.
+[tool.uv.workspace]
+members = ["apps/*", "packages/*"]
+# apps/web is a JS package (no pyproject.toml); keep it out of the Python workspace.
+exclude = ["apps/web"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-cov>=5"]
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "apps"]
+markers = ["integration: requires network or the local model download (deselected by default)"]
+addopts = "-m 'not integration'"

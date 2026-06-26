@@ -1,0 +1,20 @@
+{
+  "name": "alexandria",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Alexandria monorepo — Python (uv workspace) + JS (npm workspaces), orchestrated by Turborepo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@11.6.1",
+  "scripts": {
+    "test": "turbo run test",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "dev": "turbo run dev"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0"
+  }
+}

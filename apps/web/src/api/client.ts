@@ -1,0 +1,66 @@
+/* Typed fetch client. Talks only to the JSON API over same-origin relative
+   paths (vite proxies these to FastAPI in dev; FastAPI serves us at `/` in
+   prod). Every call funnels through `request` so error handling is uniform. */
+
+import type {
+  GraphResponse,
+  Health,
+  IngestResult,
+  NodeDetail,
+  SearchHit,
+} from "../model/types";
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...init?.headers },
+    });
+  } catch {
+    // Network/connection failure — the backend isn't reachable.
+    throw new ApiError("Can't reach Alexandria. Is the backend running?", 0);
+  }
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    const msg =
+      (detail && typeof detail === "object" && "detail" in detail
+        ? String((detail as { detail: unknown }).detail)
+        : null) ?? `Request failed (${res.status}).`;
+    throw new ApiError(msg, res.status);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  health: () => request<Health>("/healthz"),
+
+  /** Full graph, or a k-hop neighborhood around one node. */
+  graph: (opts?: { nodeId?: number; k?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.nodeId != null) params.set("node_id", String(opts.nodeId));
+    if (opts?.k != null) params.set("k", String(opts.k));
+    const qs = params.toString();
+    return request<GraphResponse>(`/graph${qs ? `?${qs}` : ""}`);
+  },
+
+  node: (id: number) => request<NodeDetail>(`/node/${id}`),
+
+  search: (q: string) => request<SearchHit[]>(`/search?q=${encodeURIComponent(q)}`),
+
+  ingest: (body: { url?: string; note?: string }) =>
+    request<IngestResult>("/ingest", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
