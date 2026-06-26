@@ -85,3 +85,11 @@ export interface Health {
   vec: boolean;
   llm: string;
 }
+
+/** Client-facing viz tunables from `GET /config` (backend `Settings`). */
+export interface VizConfig {
+  star_size_min: number;
+  star_size_max: number;
+  galaxy_resolution: number;
+  min_galaxy_size: number;
+}

@@ -8,6 +8,7 @@ import type {
   IngestResult,
   NodeDetail,
   SearchHit,
+  VizConfig,
 } from "../model/types";
 
 export class ApiError extends Error {
@@ -44,6 +45,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<Health>("/healthz"),
+
+  /** Viz tunables (star sizing + galaxy clustering knobs) from the backend. */
+  config: () => request<VizConfig>("/config"),
 
   /** Full graph, or a k-hop neighborhood around one node. */
   graph: (opts?: { nodeId?: number; k?: number }) => {
