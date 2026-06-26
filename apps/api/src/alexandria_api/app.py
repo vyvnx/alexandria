@@ -44,6 +44,19 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     def healthz():
         return {"ok": True, "vec": store.vec_available, "llm": settings.llm}
 
+    @app.get("/config")
+    def config():
+        # The client-facing "where viz config lives" seam — a dedicated endpoint
+        # (health stays health). The browser reads these on load to size stars
+        # and cluster galaxies; changing a knob is an .env edit + restart.
+        s = app.state.settings
+        return {
+            "star_size_min": s.star_size_min,
+            "star_size_max": s.star_size_max,
+            "galaxy_resolution": s.galaxy_resolution,
+            "min_galaxy_size": s.min_galaxy_size,
+        }
+
     @app.post("/ingest")
     def do_ingest(body: IngestBody):
         if not body.url and not body.note:
