@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +18,8 @@ log = get_logger("api")
 class IngestBody(BaseModel):
     url: str | None = None
     note: str | None = None
+    # How much to pull from this source. None ⇒ the server's default level.
+    abstraction: Literal["abstract", "balanced", "exhaustive"] | None = None
 
 
 def create_app(store=None, llm=None, embedder=None, settings: Settings | None = None) -> FastAPI:
@@ -44,12 +47,27 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     def healthz():
         return {"ok": True, "vec": store.vec_available, "llm": settings.llm}
 
+    @app.get("/config")
+    def config():
+        # The client-facing "where viz config lives" seam — a dedicated endpoint
+        # (health stays health). The browser reads these on load to size stars
+        # and cluster galaxies; changing a knob is an .env edit + restart.
+        s = app.state.settings
+        return {
+            "star_size_min": s.star_size_min,
+            "star_size_max": s.star_size_max,
+            "galaxy_resolution": s.galaxy_resolution,
+            "min_galaxy_size": s.min_galaxy_size,
+            "extraction_abstraction": s.extraction_abstraction,
+        }
+
     @app.post("/ingest")
     def do_ingest(body: IngestBody):
         if not body.url and not body.note:
             raise HTTPException(400, "provide url and/or note")
         try:
-            res = ingest(store, llm, embedder, settings, url=body.url, note=body.note)
+            res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
+                         abstraction=body.abstraction)
         except Exception:
             log.exception("ingest failed for url=%s", body.url)
             raise HTTPException(500, "ingest failed — see server logs")

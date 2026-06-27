@@ -24,6 +24,7 @@
 
   --animate-reveal: reveal 360ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
   --animate-rise: rise 360ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  --animate-fade: fade 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
   --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
 }
 
@@ -37,6 +38,11 @@
   from {
     opacity: 0;
     transform: translate(-50%, 8px);
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
   }
 }
 
@@ -105,6 +111,51 @@
   .btn-primary:hover {
     border-color: var(--color-starlight);
     background: color-mix(in srgb, var(--color-starlight) 26%, var(--color-panel));
+  }
+
+  /* Abstraction slider — brass thumb riding a thin atlas-line track. */
+  .atlas-range {
+    @apply w-full cursor-pointer appearance-none bg-transparent;
+    height: 1.1rem;
+  }
+  .atlas-range::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-line) 90%, transparent);
+  }
+  .atlas-range::-moz-range-track {
+    height: 3px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-line) 90%, transparent);
+  }
+  .atlas-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 14px;
+    width: 14px;
+    margin-top: -5.5px;
+    border-radius: 9999px;
+    background: var(--color-brass-bright);
+    border: 1px solid color-mix(in srgb, var(--color-brass) 60%, #000);
+    box-shadow: 0 0 10px -1px color-mix(in srgb, var(--color-brass) 70%, transparent);
+    transition: box-shadow 140ms;
+  }
+  .atlas-range::-moz-range-thumb {
+    height: 14px;
+    width: 14px;
+    border-radius: 9999px;
+    background: var(--color-brass-bright);
+    border: 1px solid color-mix(in srgb, var(--color-brass) 60%, #000);
+    box-shadow: 0 0 10px -1px color-mix(in srgb, var(--color-brass) 70%, transparent);
+  }
+  .atlas-range:focus-visible {
+    @apply outline-none;
+  }
+  .atlas-range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-starlight) 35%, transparent);
+  }
+  .atlas-range:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-starlight) 35%, transparent);
   }
 
   /* Legend marks. */

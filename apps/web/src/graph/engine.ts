@@ -8,7 +8,10 @@
 import type Graph from "graphology";
 
 import type { FilterMask } from "../model/filters";
+import type { GalaxyMap } from "../model/galaxies";
 import type { EdgeId, NodeId } from "../model/types";
+
+export type { Galaxy, GalaxyMap } from "../model/galaxies";
 
 export interface EngineOptions {
   /** Run the layout as a visible "settle" animation. Off → lay out instantly
@@ -49,6 +52,11 @@ export interface GraphEngine {
 
   /** Per-node visual overrides (size ← PageRank, color ← community/kind). */
   setNodeAttributes(attrs: NodeVisualAttrs): void;
+
+  /** Discovered galaxies → dashed boundaries + names drawn in an overlay layer.
+      Membership/name/colour are computed in the model and pushed here; the hull
+      geometry is the engine's to recompute each frame. Honors `mask.zones`. */
+  setGalaxies(map: GalaxyMap): void;
 
   /** Animate the camera to a node (search-to-focus). */
   focusNode(id: NodeId, opts?: { zoom?: number; durationMs?: number }): void;

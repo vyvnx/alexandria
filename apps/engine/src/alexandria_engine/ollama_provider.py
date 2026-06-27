@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from alexandria_core.providers.base import Extraction, ExtractedNode, Relation, TopicMatch
 from alexandria_core.graph.models import TYPED_EDGES
 from .openai_provider import (_ExtractionModel, _RelationsModel, _TopicModel,
-                              _EXTRACT_SYS, _RELATE_SYS, _TOPIC_SYS)
+                              extract_sys, _RELATE_SYS, _TOPIC_SYS)
 
 
 class OllamaProvider:
@@ -33,9 +33,9 @@ class OllamaProvider:
         )
         return resp["message"]["content"].strip()
 
-    def extract(self, text: str) -> Extraction:
+    def extract(self, text: str, *, abstraction: str = "balanced") -> Extraction:
         try:
-            m = _ExtractionModel.model_validate(self._chat_json(_EXTRACT_SYS, text))
+            m = _ExtractionModel.model_validate(self._chat_json(extract_sys(abstraction), text))
         except (ValidationError, json.JSONDecodeError, KeyError):
             return Extraction()
         ents = [ExtractedNode(e.name, "entity", e.description, e.type) for e in m.entities]
