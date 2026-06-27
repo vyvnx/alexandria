@@ -1,11 +1,20 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Repo-root .env, resolved from this file so it loads regardless of the process
+# CWD. Each app's `dev`/`test` script runs from its own folder (apps/api, ...),
+# so a relative env_file=".env" would silently miss the root .env.
+# config.py -> alexandria_core -> src -> core -> packages -> repo root
+_ENV_FILE = Path(__file__).resolve().parents[4] / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="ALEX_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="ALEX_", env_file=_ENV_FILE, extra="ignore"
+    )
 
     llm: Literal["openai", "ollama", "fake"] = "openai"
     openai_api_key: str = ""
