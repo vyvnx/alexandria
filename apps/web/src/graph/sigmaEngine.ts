@@ -35,9 +35,12 @@ const MUTED_NODE = "rgba(120, 124, 158, 0.22)";
 const MUTED_EDGE = "rgba(80, 86, 120, 0.10)";
 const FOCUS_EDGE = "rgba(127, 227, 214, 0.92)"; // starlight — selected neighborhood (§9)
 
-// Galaxy-overlay geometry (fixed internal defaults — see plan §3).
-const HULL_PAD = 22; // px each hull vertex is pushed outward from the centroid
-const ZONE_DASH = [6, 5]; // dashed-boundary pattern
+// Galaxy-overlay geometry (fixed internal defaults — see plan §3). Tuned to
+// read like a celestial atlas: faint, smooth, generously spaced boundaries.
+const HULL_PAD = 30; // px each hull vertex is pushed outward from the centroid
+const ZONE_DASH = [5, 7]; // delicate dashed-boundary pattern
+const ZONE_STROKE_ALPHA = 0.3; // discreet, like constellation lines on a sky chart
+const ZONE_LABEL_ALPHA = 0.6;
 const ZONE_FONT = '400 12px "JetBrains Mono", ui-monospace, monospace';
 
 /** hex `#rrggbb` → `rgba(...)` so zone strokes/labels can carry an alpha. */
@@ -47,6 +50,46 @@ function withAlpha(hex: string, alpha: number): string {
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
+}
+
+/** Trace a smooth closed curve that PASSES THROUGH every point, via a uniform
+    Catmull-Rom spline expressed as cubic Béziers. A midpoint-quadratic would cut
+    corners (the curve bends toward but never reaches each vertex), which can
+    leave the outermost member nodes *outside* the boundary when zoomed in. Going
+    through the vertices keeps the padded hull — and thus all members — enclosed
+    at any zoom. Assumes the path has been begun by the caller. */
+function traceSmoothClosedPath(ctx: CanvasRenderingContext2D, pts: Point[]): void {
+  const n = pts.length;
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n];
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const p3 = pts[(i + 2) % n];
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6,
+      p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6,
+      p2.y - (p3.y - p1.y) / 6,
+      p2.x,
+      p2.y,
+    );
+  }
+  ctx.closePath();
+}
+
+/** Per-galaxy boundary geometry cached in GRAPH space. Convex hulls and
+    centroids are affine-invariant, so on pan/zoom we re-project these few points
+    instead of re-deriving the hull from every member each frame. Rebuilt only
+    when node positions move (layout running) or membership/filters/data change. */
+interface HullCacheEntry {
+  color: string;
+  name: string;
+  /** true → `pts` is the convex-hull ring; false → `pts` is all members (the
+      ≤2 / collinear circle fallback). */
+  hull: boolean;
+  pts: Point[];
+  center: Point;
 }
 
 export class SigmaEngine implements GraphEngine {
@@ -70,6 +113,11 @@ export class SigmaEngine implements GraphEngine {
   // layers — never through React (keeps pan/zoom at zero React renders).
   private galaxies: GalaxyMap | null = null;
   private overlay?: HTMLCanvasElement;
+  // Boundary geometry cached in graph space; rebuilt only when it can change
+  // (see HullCacheEntry). Pan/zoom reuse it — the per-frame win that keeps the
+  // overlay off the hot path.
+  private hullCache: HullCacheEntry[] = [];
+  private galaxiesDirty = true;
 
   // Loosely typed internal store (string-keyed to avoid generic-index unions);
   // the public `on`/`emit` signatures stay strict, so callers keep full
@@ -103,6 +151,7 @@ export class SigmaEngine implements GraphEngine {
     // Redraw zone boundaries after every Sigma render, so hulls track nodes
     // through the FA2 settle and on zoom/pan without any React involvement.
     this.sigma.on("afterRender", () => this.drawGalaxies());
+    this.galaxiesDirty = true; // fresh renderer + positions → recompute hulls
     this.startLayout();
   }
 
@@ -226,6 +275,7 @@ export class SigmaEngine implements GraphEngine {
 
   setFilters(mask: FilterMask): void {
     this.filters = mask;
+    this.galaxiesDirty = true; // filter changes which members a hull encloses
     this.refresh();
   }
 
@@ -237,6 +287,7 @@ export class SigmaEngine implements GraphEngine {
 
   setGalaxies(map: GalaxyMap): void {
     this.galaxies = map;
+    this.galaxiesDirty = true;
     this.refresh(); // a render → afterRender → drawGalaxies (or no-op until mount)
   }
 
@@ -292,40 +343,42 @@ export class SigmaEngine implements GraphEngine {
 
     const map = this.galaxies;
     if (!map || this.filters?.zones === false) return;
+
+    // Rebuild the (graph-space) hull cache only when geometry can have changed:
+    // while the layout is moving nodes, or after a membership/filter/data edit.
+    // On a settled graph, pan/zoom skip this and go straight to re-projection —
+    // that's what keeps the overlay off the per-frame hot path.
+    if (this.galaxiesDirty || (this.fa2?.isRunning() ?? false)) {
+      this.buildHullCache();
+      this.galaxiesDirty = false;
+    }
+
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // then draw in CSS px (matches graphToViewport)
 
-    ctx.lineWidth = 1.4;
+    ctx.lineWidth = 1.2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
     ctx.font = ZONE_FONT;
     ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
+    ctx.textBaseline = "top"; // names sit just below the zone
 
-    for (const galaxy of map.byId) {
-      const pts: Point[] = [];
-      for (const id of galaxy.members) {
-        if (!g.hasNode(id)) continue;
-        const kind = g.getNodeAttribute(id, "kind") as string;
-        if (this.filters && !this.filters.kinds[kind as never]) continue; // hidden by kind filter
-        pts.push(
-          s.graphToViewport({
-            x: g.getNodeAttribute(id, "x") as number,
-            y: g.getNodeAttribute(id, "y") as number,
-          }),
-        );
-      }
-      if (pts.length === 0) continue;
+    for (const entry of this.hullCache) {
+      // Cheap per frame: project only the cached ring/centroid, not every member.
+      const center = s.graphToViewport(entry.center);
+      const pts = entry.pts.map((p) => s.graphToViewport(p));
 
-      const center = centroid(pts);
-      ctx.strokeStyle = withAlpha(galaxy.color, 0.5);
+      ctx.strokeStyle = withAlpha(entry.color, ZONE_STROKE_ALPHA);
       ctx.setLineDash(ZONE_DASH);
       ctx.beginPath();
 
-      const hull = pts.length >= 3 ? convexHull(pts) : null;
       let labelY: number;
-      if (hull) {
-        const padded = padHull(hull, center, HULL_PAD);
-        padded.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-        ctx.closePath();
-        labelY = Math.min(...padded.map((p) => p.y)) - 6;
+      if (entry.hull) {
+        const padded = padHull(pts, center, HULL_PAD);
+        // A smooth closed curve through the hull (each vertex a control point,
+        // the curve passing through edge midpoints) rounds the polygon into a
+        // soft zone rather than a faceted outline.
+        traceSmoothClosedPath(ctx, padded);
+        labelY = Math.max(...padded.map((p) => p.y)) + 8;
       } else {
         // ≤2 members (or a degenerate collinear set) → a small circle that
         // still encloses the spread.
@@ -333,14 +386,47 @@ export class SigmaEngine implements GraphEngine {
         for (const p of pts) r = Math.max(r, Math.hypot(p.x - center.x, p.y - center.y));
         r += HULL_PAD;
         ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
-        labelY = center.y - r - 6;
+        labelY = center.y + r + 8;
       }
       ctx.stroke();
 
       // The name floats above the zone, dim and solid (no dash on text).
       ctx.setLineDash([]);
-      ctx.fillStyle = withAlpha(galaxy.color, 0.9);
-      ctx.fillText(galaxy.name, center.x, labelY);
+      ctx.fillStyle = withAlpha(entry.color, ZONE_LABEL_ALPHA);
+      ctx.fillText(entry.name, center.x, labelY);
+    }
+  }
+
+  /** Recompute each galaxy's boundary geometry in GRAPH space — the convex-hull
+      ring + centroid, or all members for the ≤2/collinear circle fallback —
+      honoring the kind filter. Affine-invariant, so the result re-projects
+      correctly under any pan/zoom; expensive to derive, hence the cache. */
+  private buildHullCache(): void {
+    const g = this.graph;
+    const map = this.galaxies;
+    this.hullCache = [];
+    if (!g || !map) return;
+
+    for (const galaxy of map.byId) {
+      const pts: Point[] = [];
+      for (const id of galaxy.members) {
+        if (!g.hasNode(id)) continue;
+        const kind = g.getNodeAttribute(id, "kind") as string;
+        if (this.filters && !this.filters.kinds[kind as never]) continue; // hidden by kind filter
+        pts.push({
+          x: g.getNodeAttribute(id, "x") as number,
+          y: g.getNodeAttribute(id, "y") as number,
+        });
+      }
+      if (pts.length === 0) continue;
+
+      const center = centroid(pts);
+      const hull = pts.length >= 3 ? convexHull(pts) : null;
+      this.hullCache.push(
+        hull
+          ? { color: galaxy.color, name: galaxy.name, hull: true, pts: hull, center }
+          : { color: galaxy.color, name: galaxy.name, hull: false, pts, center },
+      );
     }
   }
 
@@ -399,6 +485,11 @@ export class SigmaEngine implements GraphEngine {
   stopLayout(): void {
     clearTimeout(this.settleTimer);
     if (this.fa2?.isRunning()) this.fa2.stop();
+    // The layout just froze while still expanding. Force one rebuild from the
+    // final resting positions — otherwise the cache stays a batch behind the
+    // last spread and the boundary clips members that drifted outside it.
+    this.galaxiesDirty = true;
+    this.refresh();
   }
 
   on<E extends EngineEventName>(event: E, cb: EngineEventHandler<E>): void {

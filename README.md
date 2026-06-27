@@ -53,3 +53,5 @@ docker compose up --build
 api on `:8000`, engine on `:8100`. in v1 the api embeds the engine in-process,
 so it runs standalone; the engine service is the seam for moving ml/gpu compute
 onto its own box later.
+
+inspired by: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f

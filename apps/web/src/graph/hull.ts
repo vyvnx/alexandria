@@ -1,7 +1,8 @@
-/* Pure geometry for galaxy boundaries. The engine recomputes a hull each render
-   frame from current node *viewport* positions (cheap over ≤N points at v1
-   scale), so a zone outline tracks its stars as the force layout settles and on
-   zoom/pan. No dependency — Andrew's monotone chain, hand-rolled (plan §3). */
+/* Pure geometry for galaxy boundaries. The engine computes a hull in *graph*
+   space and caches it, recomputing only while the layout moves nodes (or on a
+   membership/filter change); pan/zoom just re-project the cached ring, since a
+   convex hull is affine-invariant. No dependency — Andrew's monotone chain,
+   hand-rolled (plan §3). */
 
 export interface Point {
   x: number;

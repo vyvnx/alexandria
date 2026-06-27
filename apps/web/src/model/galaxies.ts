@@ -106,21 +106,20 @@ export function detectGalaxies(graph: Graph, cfg: GalaxyConfig = DEFAULT_GALAXY)
   return { byId, nodeToGalaxy };
 }
 
-/** A galaxy's name is its most-revisited `concept` (generality correlates with
-    revisit-frequency). Falls back to the top `entity`; never a `source`. A clean
-    future swap point for LLM umbrella-labelling behind the same signature. */
+/** A galaxy's name is its single most-revisited member of any kind — concept or
+    entity — but never a `source` (sources are the things you bring in, not the
+    area they map to). A clean future swap point for LLM umbrella-labelling. */
 export function nameGalaxy(graph: Graph, members: NodeId[]): string {
   const weightOf = (n: NodeId) => (graph.getNodeAttribute(n, "weight") as number) ?? 0;
   const kindOf = (n: NodeId) => graph.getNodeAttribute(n, "kind") as string;
   const labelOf = (n: NodeId) => (graph.getNodeAttribute(n, "label") as string) ?? "";
 
-  // members arrive numerically sorted, and V8's sort is stable, so equal-weight
+  // members arrive numerically sorted and V8's sort is stable, so equal-weight
   // ties resolve deterministically.
-  const topOfKind = (kind: string): NodeId | undefined =>
-    members.filter((n) => kindOf(n) === kind).sort((a, b) => weightOf(b) - weightOf(a))[0];
+  const ranked = members
+    .filter((n) => kindOf(n) !== "source")
+    .sort((a, b) => weightOf(b) - weightOf(a));
 
-  const pick = topOfKind("concept") ?? topOfKind("entity");
-  // Degenerate clusters (no concept/entity) still get a name from a member so
-  // the zone reads — but the source branch above is never preferred.
-  return pick ? labelOf(pick) : labelOf(members[0]);
+  // Degenerate clusters (sources only) still get a name so the zone reads.
+  return labelOf(ranked[0] ?? members[0]);
 }

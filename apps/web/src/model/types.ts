@@ -19,6 +19,11 @@ export const SEMANTIC_EDGE = "similar-to";
 export const EDGE_TYPES = [...TYPED_EDGES, SEMANTIC_EDGE] as const;
 export type EdgeType = (typeof EDGE_TYPES)[number];
 
+/* How much a source pulls into the graph, ordered least → most. The Add panel
+   slider walks these stops; "balanced" is the default. Mirrors the backend. */
+export const ABSTRACTION_LEVELS = ["abstract", "balanced", "exhaustive"] as const;
+export type Abstraction = (typeof ABSTRACTION_LEVELS)[number];
+
 export const isSemantic = (type: string): boolean => type === SEMANTIC_EDGE;
 
 /* ── Wire shapes (exactly what the API returns) ─────────────────────────── */
@@ -92,4 +97,6 @@ export interface VizConfig {
   star_size_max: number;
   galaxy_resolution: number;
   min_galaxy_size: number;
+  /** Default extraction abstraction; seeds the Add panel slider. */
+  extraction_abstraction: Abstraction;
 }

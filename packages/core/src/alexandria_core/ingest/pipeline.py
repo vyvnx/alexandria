@@ -8,6 +8,7 @@ from ..logging_config import get_logger
 from ..providers.base import LLMProvider, EmbeddingProvider
 from .loaders import load_url
 from .resolve import resolve
+from .salience import rank_entities
 
 log = get_logger("ingest")
 
@@ -25,8 +26,11 @@ class IngestResult:
 
 
 def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
-           settings: Settings, *, url=None, note=None, fetch=None) -> IngestResult:
-    log.info("ingest start: url=%s note=%s", url or "-", "yes" if note else "no")
+           settings: Settings, *, url=None, note=None, fetch=None,
+           abstraction=None) -> IngestResult:
+    level = abstraction or settings.extraction_abstraction
+    log.info("ingest start: url=%s note=%s abstraction=%s",
+             url or "-", "yes" if note else "no", level)
 
     # 1. Load
     doc = load_url(url, fetch=fetch) if url else None
@@ -45,19 +49,33 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     summary = llm.summarize(combined)
     log.debug("summarized (%d chars in, %d chars out)", len(combined), len(summary))
 
-    # 4. Extract
-    extraction = llm.extract(combined)
-    extracted = list(extraction.entities) + list(extraction.concepts)
+    # 4. Extract (the abstraction level steers how selective the extractor is)
+    extraction = llm.extract(combined, abstraction=level)
+    entities = list(extraction.entities)
+    concepts = list(extraction.concepts)
     log.info("extracted %d entities, %d concepts from %r",
-             len(extraction.entities), len(extraction.concepts), title)
-    if not extracted:
-        log.warning("no entities or concepts extracted from %r — graph unchanged", title)
+             len(entities), len(concepts), title)
 
     # 5. Embed (source + each extracted node — name + description)
     src_vec = embedder.embed([combined], kind="document")[0]
-    node_texts = [f"{n.name}. {n.description}".strip() for n in extracted]
-    node_vecs = embedder.embed(node_texts, kind="document") if node_texts else []
+    ent_texts = [f"{n.name}. {n.description}".strip() for n in entities]
+    con_texts = [f"{n.name}. {n.description}".strip() for n in concepts]
+    ent_vecs = embedder.embed(ent_texts, kind="document") if ent_texts else []
+    con_vecs = embedder.embed(con_texts, kind="document") if con_texts else []
+
+    # 5a. Abstraction cap — keep only the most salient entities for this level.
+    #     Concepts are left uncapped; the dial throttles the entity flood.
+    cap = settings.entity_cap(level)
+    n_before = len(entities)
+    entities, ent_vecs = rank_entities(entities, ent_vecs, src_vec, combined, cap)
+    if len(entities) < n_before:
+        log.info("salience cap (%s): kept %d of %d entities", level, len(entities), n_before)
+
+    extracted = entities + concepts
+    node_vecs = ent_vecs + con_vecs
     log.debug("embedded source + %d nodes", len(node_vecs))
+    if not extracted:
+        log.warning("no entities or concepts extracted from %r — graph unchanged", title)
 
     # source node first (always new)
     source_id = store.add_node(KIND_SOURCE, title, {"description": summary})

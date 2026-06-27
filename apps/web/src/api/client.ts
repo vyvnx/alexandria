@@ -3,6 +3,7 @@
    prod). Every call funnels through `request` so error handling is uniform. */
 
 import type {
+  Abstraction,
   GraphResponse,
   Health,
   IngestResult,
@@ -62,7 +63,7 @@ export const api = {
 
   search: (q: string) => request<SearchHit[]>(`/search?q=${encodeURIComponent(q)}`),
 
-  ingest: (body: { url?: string; note?: string }) =>
+  ingest: (body: { url?: string; note?: string; abstraction?: Abstraction }) =>
     request<IngestResult>("/ingest", {
       method: "POST",
       body: JSON.stringify(body),

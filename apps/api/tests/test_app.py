@@ -32,6 +32,7 @@ def test_config_returns_defaults(client):
         "star_size_max": 11.0,
         "galaxy_resolution": 1.0,
         "min_galaxy_size": 3,
+        "extraction_abstraction": "balanced",
     }
 
 
@@ -79,3 +80,15 @@ def test_ingest_requires_input(client):
     c, _ = client
     r = c.post("/ingest", json={})
     assert r.status_code == 400
+
+
+def test_ingest_accepts_abstraction_level(client):
+    c, _ = client
+    r = c.post("/ingest", json={"note": "A boxing essay.", "abstraction": "abstract"})
+    assert r.status_code == 200
+
+
+def test_ingest_rejects_unknown_abstraction(client):
+    c, _ = client
+    r = c.post("/ingest", json={"note": "x", "abstraction": "nope"})
+    assert r.status_code == 422

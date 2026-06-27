@@ -1,6 +1,6 @@
 import json
 
-from alexandria_engine.openai_provider import OpenAIProvider
+from alexandria_engine.openai_provider import OpenAIProvider, extract_sys
 from alexandria_core.providers.base import Extraction, TopicMatch
 
 
@@ -35,6 +35,32 @@ def test_extract_parses_structured_json():
     assert isinstance(e, Extraction)
     assert e.entities[0].name == "Vaswani" and e.entities[0].type == "person"
     assert e.concepts[0].name == "attention"
+
+
+def test_extract_sys_varies_by_abstraction_level():
+    abstract = extract_sys("abstract")
+    balanced = extract_sys("balanced")
+    exhaustive = extract_sys("exhaustive")
+    assert len({abstract, balanced, exhaustive}) == 3
+    # abstract steers the model toward only the most central entities
+    assert "central" in abstract.lower() or "only" in abstract.lower()
+
+
+def test_extract_unknown_level_falls_back_to_balanced():
+    assert extract_sys("nonsense") == extract_sys("balanced")
+
+
+def test_extract_uses_the_prompt_for_the_requested_level(monkeypatch):
+    p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
+    seen = {}
+
+    def _capture(system, user):
+        seen["system"] = system
+        return {"entities": [], "concepts": []}
+
+    monkeypatch.setattr(p, "_chat_json", _capture)
+    p.extract("text", abstraction="abstract")
+    assert seen["system"] == extract_sys("abstract")
 
 
 def test_relate_parses_and_filters_unknown_names():

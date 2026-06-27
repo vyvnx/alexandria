@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import alexandriaIcon from "../assets/alexandria-icon.png";
 import { useGraphEngine } from "../hooks/useGraphEngine";
+import { detectGalaxies } from "../model/galaxies";
 import { buildGraph } from "../model/graph";
 import {
   countGraph,
   defaultMask,
   toggleEdgeType,
   toggleKind,
+  toggleZones,
   type FilterMask,
   type GraphCounts,
 } from "../model/filters";
@@ -21,8 +23,20 @@ import type {
   NodeDetail,
   NodeId,
   NodeKind,
+  VizConfig,
 } from "../model/types";
+
+// Viz tunables fall back to the plan's defaults if GET /config is unreachable,
+// so the atlas still sizes stars and clusters galaxies sensibly offline.
+const DEFAULT_CONFIG: VizConfig = {
+  star_size_min: 4,
+  star_size_max: 11,
+  galaxy_resolution: 1.0,
+  min_galaxy_size: 3,
+  extraction_abstraction: "balanced",
+};
 import { ActionDock } from "../ui/ActionDock";
+import { ChartProgress } from "../ui/ChartProgress";
 import { Legend } from "../ui/Legend";
 import { NodeInspector } from "../ui/NodeInspector";
 import { StatusBar } from "../ui/StatusBar";
@@ -31,10 +45,12 @@ export function App() {
   const [graphData, setGraphData] = useState<GraphResponse | null>(null);
   const [counts, setCounts] = useState<GraphCounts | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
+  const [config, setConfig] = useState<VizConfig>(DEFAULT_CONFIG);
   const [mask, setMask] = useState<FilterMask>(defaultMask);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<NodeDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
 
   const maskRef = useRef(mask);
@@ -46,6 +62,7 @@ export function App() {
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => undefined);
+    api.config().then(setConfig).catch(() => undefined); // keep DEFAULT_CONFIG on failure
     void loadGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -60,12 +77,17 @@ export function App() {
     }
   }
 
-  // Rebuild the graphology model and hand it to the engine whenever data changes.
+  // Rebuild the graphology model and hand it to the engine whenever data (or the
+  // viz config, which may arrive after first paint) changes. Sizing + galaxy
+  // membership are computed here, in the browser, so the hulls match the layout.
   useEffect(() => {
     if (!graphData) return;
-    const g = buildGraph(graphData);
+    const g = buildGraph(graphData, config);
     engineRef.current?.setData(g);
+    const galaxies = detectGalaxies(g, config);
+    engineRef.current?.setGalaxies(galaxies);
     engineRef.current?.setFilters(maskRef.current);
+    setCounts((c) => (c ? { ...c, galaxies: galaxies.byId.length } : c));
     if (pendingFocus.current != null) {
       const id = String(pendingFocus.current);
       pendingFocus.current = null;
@@ -76,7 +98,7 @@ export function App() {
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphData]);
+  }, [graphData, config]);
 
   // Filters are a visibility mask on the engine — never a data reload.
   useEffect(() => {
@@ -172,9 +194,18 @@ export function App() {
         counts={counts}
         onToggleKind={(k: NodeKind) => setMask((m) => toggleKind(m, k))}
         onToggleEdgeType={(t: EdgeType) => setMask((m) => toggleEdgeType(m, t))}
+        onToggleZones={() => setMask((m) => toggleZones(m))}
       />
 
-      <ActionDock onPick={focusAndSelect} onIngested={handleIngested} />
+      <ActionDock
+        onPick={focusAndSelect}
+        onIngested={handleIngested}
+        onBusyChange={setIngesting}
+        onIngestError={(msg) => setToast({ msg, error: true })}
+        defaultAbstraction={config.extraction_abstraction}
+      />
+
+      <ChartProgress active={ingesting} />
 
       <NodeInspector
         detail={detail}

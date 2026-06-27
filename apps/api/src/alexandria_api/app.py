@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +18,8 @@ log = get_logger("api")
 class IngestBody(BaseModel):
     url: str | None = None
     note: str | None = None
+    # How much to pull from this source. None ⇒ the server's default level.
+    abstraction: Literal["abstract", "balanced", "exhaustive"] | None = None
 
 
 def create_app(store=None, llm=None, embedder=None, settings: Settings | None = None) -> FastAPI:
@@ -55,6 +58,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             "star_size_max": s.star_size_max,
             "galaxy_resolution": s.galaxy_resolution,
             "min_galaxy_size": s.min_galaxy_size,
+            "extraction_abstraction": s.extraction_abstraction,
         }
 
     @app.post("/ingest")
@@ -62,7 +66,8 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         if not body.url and not body.note:
             raise HTTPException(400, "provide url and/or note")
         try:
-            res = ingest(store, llm, embedder, settings, url=body.url, note=body.note)
+            res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
+                         abstraction=body.abstraction)
         except Exception:
             log.exception("ingest failed for url=%s", body.url)
             raise HTTPException(500, "ingest failed — see server logs")

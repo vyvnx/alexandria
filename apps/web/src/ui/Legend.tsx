@@ -2,20 +2,27 @@ import { edgeColor, kindColor } from "../model/graph";
 import type { FilterMask, GraphCounts } from "../model/filters";
 import { NODE_KINDS, SEMANTIC_EDGE, TYPED_EDGES, type EdgeType, type NodeKind } from "../model/types";
 
-/* The legend is the filter — a compact map key pinned near the masthead. Two
-   lean sections (Stars = node kinds, Lines = edge types) keep controls tidy in
-   a responsive grid; toggling a chip masks that kind / edge-type without
-   forcing scroll or stealing focus. */
+// A representative tint for the Zones swatch — the galaxies themselves cycle a
+// palette; the master toggle just needs to read as "dashed boundary".
+const ZONE_SWATCH = "#9db4d8";
+
+/* The legend is the filter — a compact map key pinned near the masthead. Three
+   lean sections (Stars = node kinds, Lines = edge types, Zones = galaxy
+   boundaries) keep controls tidy in a responsive grid; toggling a chip masks
+   that kind / edge-type / the zones overlay without forcing scroll or stealing
+   focus. */
 export function Legend({
   mask,
   counts,
   onToggleKind,
   onToggleEdgeType,
+  onToggleZones,
 }: {
   mask: FilterMask;
   counts: GraphCounts | null;
   onToggleKind: (k: NodeKind) => void;
   onToggleEdgeType: (t: EdgeType) => void;
+  onToggleZones: () => void;
 }) {
   return (
     <div className="pointer-events-auto absolute right-4 top-[4.75rem] z-30 max-w-[min(520px,92vw)] max-md:hidden">
@@ -48,6 +55,20 @@ export function Legend({
               onClick={() => onToggleEdgeType(SEMANTIC_EDGE)}
             >
               <span className="dash dash-dotted" style={{ color: edgeColor(SEMANTIC_EDGE) }} />
+            </Chip>
+          </Section>
+          <Section title="Zones">
+            <Chip
+              on={mask.zones}
+              count={counts?.galaxies}
+              label="galaxies"
+              onClick={onToggleZones}
+            >
+              <span
+                className="size-3 flex-none rounded-[3px]"
+                style={{ border: `1.5px dashed ${ZONE_SWATCH}` }}
+                aria-hidden
+              />
             </Chip>
           </Section>
         </div>

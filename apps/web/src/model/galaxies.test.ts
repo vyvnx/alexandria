@@ -71,7 +71,7 @@ describe("detectGalaxies", () => {
 });
 
 describe("nameGalaxy", () => {
-  // An entity outweighs every concept, yet the name must still be a concept.
+  // Vaswani (entity) is the most-revisited member; transformers (concept) next.
   const naming: GraphResponse = {
     nodes: [
       { id: 1, kind: "source", name: "s1", data: {} },
@@ -93,18 +93,15 @@ describe("nameGalaxy", () => {
     ],
   };
 
-  it("picks the top-weight concept, not a heavier entity and never a source", () => {
+  it("names a galaxy after its most-revisited member, of any kind", () => {
     const g = buildGraph(naming);
-    const all = g.nodes();
-    const name = nameGalaxy(g, all);
-    expect(name).toBe("transformers"); // the most-revisited concept
-    expect(name).not.toBe("Vaswani"); // not the heavier entity
+    // the entity outranks every concept here — kind is no longer a tiebreaker
+    expect(nameGalaxy(g, g.nodes())).toBe("Vaswani");
   });
 
-  it("falls back to the top entity when a cluster has no concepts", () => {
+  it("never names a galaxy after a source", () => {
     const g = buildGraph(naming);
-    // restrict to sources + the entity only
-    const name = nameGalaxy(g, ["1", "2", "3", "12"]);
-    expect(name).toBe("Vaswani");
+    // sources (weight 0) are excluded even when they dominate the membership
+    expect(nameGalaxy(g, ["1", "2", "3", "11"])).toBe("rnn");
   });
 });
