@@ -26,7 +26,7 @@ export function NodeInspector({
     <aside
       aria-hidden={!open}
       aria-label="Node details"
-      className={`panel absolute top-0 right-0 bottom-0 z-40 flex w-[min(380px,92vw)] flex-col !rounded-none border-l transition-transform duration-300 ease-out ${
+      className={`panel absolute top-0 right-0 bottom-0 z-50 flex w-[min(380px,92vw)] flex-col !rounded-none border-l transition-transform duration-300 ease-out ${
         open ? "translate-x-0" : "translate-x-full"
       }`}
     >

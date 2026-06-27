@@ -22,6 +22,37 @@ def test_healthz(client):
     assert r.status_code == 200 and r.json()["ok"] is True
 
 
+def test_config_returns_defaults(client):
+    c, _ = client
+    r = c.get("/config")
+    assert r.status_code == 200
+    body = r.json()
+    assert body == {
+        "star_size_min": 4.0,
+        "star_size_max": 11.0,
+        "galaxy_resolution": 1.0,
+        "min_galaxy_size": 3,
+        "extraction_abstraction": "balanced",
+    }
+
+
+def test_config_reflects_overridden_settings():
+    store = GraphStore(":memory:")
+    store.init_schema()
+    settings = Settings(
+        _env_file=None, llm="fake",
+        star_size_min=2.0, star_size_max=20.0,
+        galaxy_resolution=1.5, min_galaxy_size=5,
+    )
+    app = create_app(store=store, llm=FakeLLM(), embedder=FakeEmbedder(), settings=settings)
+    c = TestClient(app)
+    body = c.get("/config").json()
+    assert body["star_size_min"] == 2.0
+    assert body["star_size_max"] == 20.0
+    assert body["galaxy_resolution"] == 1.5
+    assert body["min_galaxy_size"] == 5
+
+
 def test_ingest_note_then_graph_and_search(client):
     c, _ = client
     r = c.post("/ingest", json={"note": "Attention mechanisms power transformers."})
@@ -49,3 +80,15 @@ def test_ingest_requires_input(client):
     c, _ = client
     r = c.post("/ingest", json={})
     assert r.status_code == 400
+
+
+def test_ingest_accepts_abstraction_level(client):
+    c, _ = client
+    r = c.post("/ingest", json={"note": "A boxing essay.", "abstraction": "abstract"})
+    assert r.status_code == 200
+
+
+def test_ingest_rejects_unknown_abstraction(client):
+    c, _ = client
+    r = c.post("/ingest", json={"note": "x", "abstraction": "nope"})
+    assert r.status_code == 422

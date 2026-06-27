@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countGraph, defaultMask, toggleEdgeType, toggleKind } from "./filters";
+import { countGraph, defaultMask, toggleEdgeType, toggleKind, toggleZones } from "./filters";
 import type { GraphResponse } from "./types";
 
 describe("filter mask", () => {
@@ -8,6 +8,15 @@ describe("filter mask", () => {
     const m = defaultMask();
     expect(m.kinds.source).toBe(true);
     expect(m.edgeTypes["similar-to"]).toBe(true);
+    expect(m.zones).toBe(true);
+  });
+
+  it("toggles zones immutably", () => {
+    const m = defaultMask();
+    const next = toggleZones(m);
+    expect(next.zones).toBe(false);
+    expect(m.zones).toBe(true); // original untouched
+    expect(toggleZones(next).zones).toBe(true);
   });
 
   it("toggles a kind immutably", () => {

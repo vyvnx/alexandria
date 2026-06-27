@@ -10,7 +10,13 @@ import {
   type GraphResponse,
   type NodeId,
   type NodeKind,
+  type VizConfig,
 } from "./types";
+
+/** Just the two sizing knobs from VizConfig; defaulted so callers/tests stay
+    simple. The full config is threaded through from `GET /config` at runtime. */
+export type SizeConfig = Pick<VizConfig, "star_size_min" | "star_size_max">;
+const DEFAULT_SIZE: SizeConfig = { star_size_min: 4, star_size_max: 11 };
 
 /* Celestial convention (design spec §10):
    nodes = glowing stars (colour by kind), edges = brass constellation lines,
@@ -46,7 +52,7 @@ export interface BuildResult {
 }
 
 /** Adapt the API payload into a graphology graph ready for the engine. */
-export function buildGraph(data: GraphResponse): Graph {
+export function buildGraph(data: GraphResponse, cfg: SizeConfig = DEFAULT_SIZE): Graph {
   const graph = new Graph({ multi: true, type: "undirected" });
   const total = data.nodes.length;
 
@@ -58,7 +64,7 @@ export function buildGraph(data: GraphResponse): Graph {
       color: kindColor(n.kind),
       x: pos.x,
       y: pos.y,
-      size: 4, // refined to degree below
+      size: 4, // refined by revisit-weight below
       data: n.data,
     });
   });
@@ -80,20 +86,45 @@ export function buildGraph(data: GraphResponse): Graph {
     });
   }
 
-  sizeByDegree(graph);
+  sizeByWeight(graph, cfg);
   return graph;
 }
 
-/** Star magnitude ∝ degree (a stand-in for PageRank until the WASM core lands). */
-function sizeByDegree(graph: Graph): void {
-  let max = 1;
-  graph.forEachNode((node) => {
-    max = Math.max(max, graph.degree(node));
+/* Star magnitude ∝ *revisit-weight*: how many distinct sources mention a topic
+   (its incident `mentions`/`about` edges), NOT raw degree. Degree conflates the
+   revisit signal with `similar-to` (a machine guess), so a once-read concept
+   near many others would wrongly outshine a topic read across five sources.
+   Sources are excluded from weighting and pinned to the floor — luminance is
+   carried by their colour, not size (plan §4). A stand-in until PageRank lands
+   in the WASM core. */
+export function sizeByWeight(graph: Graph, cfg: SizeConfig = DEFAULT_SIZE): void {
+  const { star_size_min: min, star_size_max: max } = cfg;
+
+  graph.forEachNode((node) => graph.setNodeAttribute(node, "weight", 0));
+  graph.forEachEdge((_edge, attrs, s, t) => {
+    const etype = (attrs as { etype?: string }).etype;
+    if (etype !== "mentions" && etype !== "about") return;
+    for (const end of [s, t]) {
+      if (graph.getNodeAttribute(end, "kind") === "source") continue;
+      const w = graph.getNodeAttribute(end, "weight") as number;
+      graph.setNodeAttribute(end, "weight", w + 1);
+    }
   });
+
+  let maxW = 0;
   graph.forEachNode((node) => {
-    const d = graph.degree(node);
-    const t = Math.sqrt(d) / Math.sqrt(max); // compress the long tail
-    graph.setNodeAttribute(node, "size", 3 + t * 11);
+    if (graph.getNodeAttribute(node, "kind") === "source") return;
+    maxW = Math.max(maxW, graph.getNodeAttribute(node, "weight") as number);
+  });
+
+  graph.forEachNode((node) => {
+    if (graph.getNodeAttribute(node, "kind") === "source") {
+      graph.setNodeAttribute(node, "size", min); // fixed-small; weighted by colour
+      return;
+    }
+    const w = graph.getNodeAttribute(node, "weight") as number;
+    const t = maxW > 0 ? Math.sqrt(w / maxW) : 0; // sqrt compresses the long tail
+    graph.setNodeAttribute(node, "size", min + t * (max - min));
   });
 }
 

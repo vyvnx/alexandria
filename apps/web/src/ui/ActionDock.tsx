@@ -3,7 +3,29 @@ import { useEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import { kindColor } from "../model/graph";
-import type { IngestResult, SearchHit } from "../model/types";
+import {
+  ABSTRACTION_LEVELS,
+  type Abstraction,
+  type IngestResult,
+  type SearchHit,
+} from "../model/types";
+
+// Slider stops, least → most pulled. The tick sits under the thumb; the hint
+// explains what this level does to the graph.
+const ABSTRACTION_META: Record<Abstraction, { tick: string; hint: string }> = {
+  abstract: {
+    tick: "Notable",
+    hint: "Only the few entities central to the source — skips the long tail of passing mentions.",
+  },
+  balanced: {
+    tick: "Balanced",
+    hint: "Notable entities and the key concepts, without the trivia.",
+  },
+  exhaustive: {
+    tick: "Everything",
+    hint: "Every entity and concept the source mentions.",
+  },
+};
 
 /* The action cluster: a minimal floating toolbar bottom-right with two tools —
    the magnifier (search-to-focus) and the star (chart a source). One panel is
@@ -14,9 +36,18 @@ type Mode = "none" | "search" | "add";
 export function ActionDock({
   onPick,
   onIngested,
+  onBusyChange,
+  onIngestError,
+  defaultAbstraction,
 }: {
   onPick: (id: number) => void;
   onIngested: (r: IngestResult) => void;
+  /** Fires true when an ingest starts, false when it settles — drives the
+      page-level charting progress bar. */
+  onBusyChange?: (busy: boolean) => void;
+  /** An ingest failed after the panel closed — surfaced as a page toast. */
+  onIngestError?: (message: string) => void;
+  defaultAbstraction: Abstraction;
 }) {
   const [mode, setMode] = useState<Mode>("none");
 
@@ -26,18 +57,47 @@ export function ActionDock({
 
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
+  const [abstraction, setAbstraction] = useState<Abstraction>(defaultAbstraction);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Mirror busy into a ref so the keyboard handler can block re-opening Add
+  // mid-charting without re-binding the global listener.
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
 
   const dockRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
 
-  // Focus the relevant field when a panel opens.
+  // Focus the relevant field when a panel opens; the Add panel also resets the
+  // slider to the (possibly server-overridden) default each time it opens.
   useEffect(() => {
     if (mode === "search") searchRef.current?.focus();
-    if (mode === "add") urlRef.current?.focus();
-  }, [mode]);
+    if (mode === "add") {
+      urlRef.current?.focus();
+      setAbstraction(defaultAbstraction);
+    }
+  }, [mode, defaultAbstraction]);
+
+  // Global shortcuts (matching the kbd hints): "/" opens search, "N" opens add.
+  // Suppressed while typing in a field, so notes/queries can contain "n" or "/".
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.key === "/") {
+        e.preventDefault();
+        setMode("search");
+      } else if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        if (!busyRef.current) setMode("add"); // can't start a second charting
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   // Debounced search — never on every keystroke.
   useEffect(() => {
@@ -99,20 +159,26 @@ export function ActionDock({
       return;
     }
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
+    setMode("none"); // close immediately — the bottom bar now carries progress
     try {
       const result = await api.ingest({
         url: url.trim() || undefined,
         note: note.trim() || undefined,
+        abstraction,
       });
       onIngested(result);
       setUrl("");
       setNote("");
-      setMode("none");
+      setAbstraction(defaultAbstraction);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      // Panel is gone — surface the failure as a toast and keep the inputs so
+      // reopening Add lets the user retry without retyping.
+      onIngestError?.(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
 
@@ -120,7 +186,7 @@ export function ActionDock({
     <div
       ref={dockRef}
       onKeyDown={(e) => e.key === "Escape" && setMode("none")}
-      className="absolute right-4 bottom-10 z-50 flex flex-col items-end gap-3"
+      className="absolute right-4 bottom-10 z-40 flex flex-col items-end gap-3"
     >
       {/* Search panel */}
       {mode === "search" && (
@@ -217,6 +283,39 @@ export function ActionDock({
             />
           </label>
 
+          {/* How much to pull from the source — least (left) to most (right). */}
+          <div className="flex flex-col gap-1.5">
+            <span className="font-mono text-[0.72rem] tracking-[0.12em] text-vellum-dim uppercase">
+              How much to pull
+            </span>
+            <input
+              type="range"
+              className="atlas-range"
+              min={0}
+              max={ABSTRACTION_LEVELS.length - 1}
+              step={1}
+              value={ABSTRACTION_LEVELS.indexOf(abstraction)}
+              aria-label="How much to pull from this source"
+              onChange={(e) => setAbstraction(ABSTRACTION_LEVELS[Number(e.target.value)])}
+            />
+            <div className="flex justify-between">
+              {ABSTRACTION_LEVELS.map((lvl) => (
+                <span
+                  key={lvl}
+                  className={`font-mono text-[0.62rem] tracking-[0.08em] uppercase transition-colors duration-200 ${
+                    lvl === abstraction ? "text-brass-bright" : "text-vellum-dim/60"
+                  }`}
+                >
+                  {ABSTRACTION_META[lvl].tick}
+                </span>
+              ))}
+            </div>
+            {/* keyed so the caption gently re-fades each time the level changes */}
+            <p key={abstraction} className="animate-fade text-[0.74rem] leading-snug text-vellum-dim">
+              {ABSTRACTION_META[abstraction].hint}
+            </p>
+          </div>
+
           {error && (
             <p className="text-rose text-[0.82rem]" role="alert">
               {error}
@@ -252,6 +351,7 @@ export function ActionDock({
           ariaLabel="Chart a source"
           active={mode === "add"}
           shortcut="N"
+          disabled={busy}
           onClick={() => setMode(mode === "add" ? "none" : "add")}
         />
       </div>
@@ -265,6 +365,7 @@ function DockButton({
   active,
   ariaLabel,
   shortcut,
+  disabled,
   onClick,
 }: {
   icon: LucideIcon;
@@ -272,6 +373,7 @@ function DockButton({
   active: boolean;
   ariaLabel: string;
   shortcut?: string;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -279,8 +381,9 @@ function DockButton({
       type="button"
       aria-label={ariaLabel}
       aria-pressed={active}
+      disabled={disabled}
       onClick={onClick}
-      className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[0.78rem] font-medium transition focus-visible:ring-2 focus-visible:ring-starlight focus-visible:outline-none ${
+      className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[0.78rem] font-medium transition focus-visible:ring-2 focus-visible:ring-starlight focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${
         active
           ? "border-brass/50 bg-brass/15 text-vellum"
           : "border-transparent text-vellum-dim hover:border-line/60 hover:bg-void-2/90 hover:text-vellum"

@@ -34,11 +34,32 @@ class _RelationsModel(BaseModel):
     relations: list[_Rel] = []
 
 
-_EXTRACT_SYS = (
-    "Extract named entities (people, orgs, tools, papers) and abstract concepts from the text. "
+_EXTRACT_JSON = (
     'Return JSON {"entities":[{"name","type","description"}],'
     '"concepts":[{"name","description"}]}. Keep names canonical and short.'
 )
+# How selective the extractor is, by abstraction level. Concepts stay broad at
+# every level; the levels differ in how aggressively they prune entities.
+_EXTRACT_SELECTIVITY = {
+    "abstract": (
+        "Extract ONLY the handful of entities (people, orgs, tools, papers) truly central "
+        "to the text — its main subjects. Skip incidental mentions, members of lists or tables, "
+        "and names that merely appear in passing. Still extract the key abstract concepts. "
+    ),
+    "balanced": (
+        "Extract the notable named entities (people, orgs, tools, papers) and the abstract "
+        "concepts from the text. Skip trivia and names that only appear in passing. "
+    ),
+    "exhaustive": (
+        "Extract named entities (people, orgs, tools, papers) and abstract concepts from the text. "
+    ),
+}
+
+
+def extract_sys(abstraction: str) -> str:
+    """System prompt for the extractor at a given abstraction level."""
+    lead = _EXTRACT_SELECTIVITY.get(abstraction, _EXTRACT_SELECTIVITY["balanced"])
+    return lead + _EXTRACT_JSON
 _RELATE_SYS = (
     "Given a list of node names and the source text, return typed relations among them as JSON "
     '{"relations":[{"src_name","dst_name","type","evidence"}]}. '
@@ -84,9 +105,9 @@ class OpenAIProvider:
         )
         return resp.choices[0].message.content.strip()
 
-    def extract(self, text: str) -> Extraction:
+    def extract(self, text: str, *, abstraction: str = "balanced") -> Extraction:
         try:
-            m = _ExtractionModel.model_validate(self._chat_json(_EXTRACT_SYS, text))
+            m = _ExtractionModel.model_validate(self._chat_json(extract_sys(abstraction), text))
         except (ValidationError, json.JSONDecodeError):
             return Extraction()
         ents = [ExtractedNode(e.name, "entity", e.description, e.type) for e in m.entities]

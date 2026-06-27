@@ -3,11 +3,13 @@
    prod). Every call funnels through `request` so error handling is uniform. */
 
 import type {
+  Abstraction,
   GraphResponse,
   Health,
   IngestResult,
   NodeDetail,
   SearchHit,
+  VizConfig,
 } from "../model/types";
 
 export class ApiError extends Error {
@@ -45,6 +47,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<Health>("/healthz"),
 
+  /** Viz tunables (star sizing + galaxy clustering knobs) from the backend. */
+  config: () => request<VizConfig>("/config"),
+
   /** Full graph, or a k-hop neighborhood around one node. */
   graph: (opts?: { nodeId?: number; k?: number }) => {
     const params = new URLSearchParams();
@@ -58,7 +63,7 @@ export const api = {
 
   search: (q: string) => request<SearchHit[]>(`/search?q=${encodeURIComponent(q)}`),
 
-  ingest: (body: { url?: string; note?: string }) =>
+  ingest: (body: { url?: string; note?: string; abstraction?: Abstraction }) =>
     request<IngestResult>("/ingest", {
       method: "POST",
       body: JSON.stringify(body),
