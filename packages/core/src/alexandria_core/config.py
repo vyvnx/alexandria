@@ -2,13 +2,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Repo-root .env, resolved from this file so it loads regardless of the process
-# CWD. Each app's `dev`/`test` script runs from its own folder (apps/api, ...),
-# so a relative env_file=".env" would silently miss the root .env.
+# Repo root, resolved from this file so paths are stable regardless of the
+# process CWD. Each app's `dev`/`test` script runs from its own folder
+# (apps/api, ...), so anything resolved against the CWD would silently differ
+# depending on where the app is launched from.
 # config.py -> alexandria_core -> src -> core -> packages -> repo root
-_ENV_FILE = Path(__file__).resolve().parents[4] / ".env"
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_ENV_FILE = _REPO_ROOT / ".env"
 
 
 class Settings(BaseSettings):
@@ -49,6 +52,18 @@ class Settings(BaseSettings):
     galaxy_resolution: float = 1.0        # Louvain resolution; higher ⇒ more, smaller galaxies
     min_galaxy_size: int = 3              # communities below this draw no hull (lone stars)
 
+
+    @field_validator("db_path")
+    @classmethod
+    def _anchor_db_path(cls, v: str) -> str:
+        # A relative db_path would otherwise be resolved by sqlite against the
+        # process CWD, silently pointing at different files (and splitting the
+        # graph) depending on where the app is launched. Anchor it to the repo
+        # root so one setting always means one file. ":memory:" and absolute
+        # paths are left untouched.
+        if v == ":memory:" or Path(v).is_absolute():
+            return v
+        return str((_REPO_ROOT / v).resolve())
 
     def entity_cap(self, abstraction: str | None) -> int | None:
         """Per-source entity ceiling for an abstraction level. None ⇒ unlimited.

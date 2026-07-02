@@ -51,18 +51,28 @@ export function App() {
   const [detail, setDetail] = useState<NodeDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
+  const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(
+    null,
+  );
 
   const maskRef = useRef(mask);
   const pendingFocus = useRef<number | null>(null);
 
-  const { containerRef, engineRef, webgl2 } = useGraphEngine((id: NodeId | null) => {
-    setSelectedId(id == null ? null : Number(id));
-  });
+  const { containerRef, engineRef, webgl2 } = useGraphEngine(
+    (id: NodeId | null) => {
+      setSelectedId(id == null ? null : Number(id));
+    },
+  );
 
   useEffect(() => {
-    api.health().then(setHealth).catch(() => undefined);
-    api.config().then(setConfig).catch(() => undefined); // keep DEFAULT_CONFIG on failure
+    api
+      .health()
+      .then(setHealth)
+      .catch(() => undefined);
+    api
+      .config()
+      .then(setConfig)
+      .catch(() => undefined); // keep DEFAULT_CONFIG on failure
     void loadGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -73,7 +83,10 @@ export function App() {
       setGraphData(data);
       setCounts(countGraph(data));
     } catch (err) {
-      setToast({ msg: err instanceof Error ? err.message : "Couldn't load the atlas.", error: true });
+      setToast({
+        msg: err instanceof Error ? err.message : "Couldn't load the atlas.",
+        error: true,
+      });
     }
   }
 
@@ -161,16 +174,12 @@ export function App() {
       <div ref={containerRef} className="absolute inset-0 z-0" />
 
       <header className="masthead-bg pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center gap-3 px-[1.1rem] py-[0.85rem]">
-        <div className="pointer-events-auto flex items-baseline gap-2 select-none">
-          <img
-            src={alexandriaIcon}
-            alt="Alexandria icon"
-            className="h-[2.35rem] w-[2.35rem] -translate-y-[0.05rem] self-center drop-shadow-[0_0_0.4rem_rgba(181,153,92,0.6)]"
-          />
+        <div className="pointer-events-auto flex items-center gap-2 select-none">
           <span className="font-display text-[clamp(1.6rem,1.1rem+1.6vw,2.4rem)] font-medium tracking-[0.18em] text-vellum">
             Alexandria
           </span>
-          <span className="hidden font-mono text-[0.72rem] tracking-[0.04em] text-vellum-dim md:inline">
+          <span>•</span>
+          <span className="hidden font-mono text- tracking-[0.04em] text-vellum-dim md:inline">
             a celestial index of what you've read
           </span>
         </div>
@@ -180,10 +189,16 @@ export function App() {
       {isEmpty && (
         <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center text-center">
           <div className="max-w-[30ch]">
-            <Telescope className="mx-auto size-9 text-brass-bright" strokeWidth={1.5} />
-            <h2 className="font-display mt-2.5 text-[1.85rem] font-medium">The sky is empty</h2>
+            <Telescope
+              className="mx-auto size-9 text-brass-bright"
+              strokeWidth={1.5}
+            />
+            <h2 className="font-display mt-2.5 text-[1.85rem] font-medium">
+              The sky is empty
+            </h2>
             <p className="mt-1 text-vellum-dim">
-              Chart your first source to begin the atlas — paste a link and your thoughts on it.
+              Chart your first source to begin the atlas — paste a link and your
+              thoughts on it.
             </p>
           </div>
         </div>
@@ -215,18 +230,25 @@ export function App() {
       />
 
       {!webgl2 && (
-        <Toast error>WebGL2 isn't available — the graph may not render. Try a current browser.</Toast>
+        <Toast error>
+          WebGL2 isn't available — the graph may not render. Try a current
+          browser.
+        </Toast>
       )}
-      {toast && (
-        <Toast error={toast.error}>{toast.msg}</Toast>
-      )}
+      {toast && <Toast error={toast.error}>{toast.msg}</Toast>}
 
       <StatusBar counts={counts} health={health} />
     </div>
   );
 }
 
-function Toast({ error, children }: { error?: boolean; children: React.ReactNode }) {
+function Toast({
+  error,
+  children,
+}: {
+  error?: boolean;
+  children: React.ReactNode;
+}) {
   const Icon = error ? AlertTriangle : Sparkles;
   return (
     <div
@@ -235,7 +257,9 @@ function Toast({ error, children }: { error?: boolean; children: React.ReactNode
         error ? "border-rose/55" : ""
       }`}
     >
-      <Icon className={`size-4 flex-none ${error ? "text-rose" : "text-brass-bright"}`} />
+      <Icon
+        className={`size-4 flex-none ${error ? "text-rose" : "text-brass-bright"}`}
+      />
       {children}
     </div>
   );

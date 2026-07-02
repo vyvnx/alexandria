@@ -1,4 +1,28 @@
+from pathlib import Path
+
 from alexandria_core.config import Settings
+
+
+def test_relative_db_path_resolves_to_repo_root_absolute(monkeypatch, tmp_path):
+    # The bug this guards: sqlite resolves a relative db_path against the process
+    # CWD, so the same setting points at different files depending on where the
+    # app is launched (apps/api vs repo root) — silently splitting the graph
+    # across two .db files. Anchoring to the repo root makes it absolute and
+    # CWD-independent.
+    monkeypatch.chdir(tmp_path)  # launch from anywhere
+    s = Settings(_env_file=None, db_path="../data/alexandria.db")
+    assert Path(s.db_path).is_absolute()
+    assert s.db_path.endswith("/data/alexandria.db")
+
+
+def test_absolute_db_path_is_left_alone():
+    s = Settings(_env_file=None, db_path="/srv/alexandria.db")
+    assert s.db_path == "/srv/alexandria.db"
+
+
+def test_memory_db_path_is_preserved():
+    s = Settings(_env_file=None, db_path=":memory:")
+    assert s.db_path == ":memory:"
 
 
 def test_defaults():
