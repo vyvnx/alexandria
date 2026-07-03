@@ -1,3 +1,4 @@
+import base64
 import json
 
 from pydantic import BaseModel, ValidationError
@@ -131,3 +132,16 @@ class OpenAIProvider:
         except (ValidationError, json.JSONDecodeError):
             return TopicMatch(same_topic=False, reason="parse-error")
         return TopicMatch(m.same_topic, m.canonical_topic, m.reason)
+
+    def describe_image(self, images: list[bytes], prompt: str) -> str:
+        content = [{"type": "text", "text": prompt}]
+        for img in images:
+            b64 = base64.b64encode(img).decode()
+            content.append({"type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{b64}"}})
+        resp = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": content}],
+            temperature=0,
+        )
+        return resp.choices[0].message.content.strip()
