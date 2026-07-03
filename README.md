@@ -55,3 +55,14 @@ so it runs standalone; the engine service is the seam for moving ml/gpu compute
 onto its own box later.
 
 inspired by: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+
+## Visual enrichment (optional)
+
+Ingest can screenshot a page and have a VLM read tables/charts trafilatura drops.
+Opt in per source with `visual=true`. It needs the headless browser extra:
+
+    uv sync --extra visual
+    playwright install chromium
+
+Vision uses the same provider as `ALEX_LLM` (openai/ollama), with
+`ALEX_OPENAI_VISION_MODEL` / `ALEX_OLLAMA_VISION_MODEL`.
