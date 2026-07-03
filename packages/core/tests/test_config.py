@@ -66,3 +66,20 @@ def test_entity_cap_none_uses_the_configured_default_level():
 def test_entity_cap_unknown_level_falls_back_to_default_level():
     s = Settings(_env_file=None)  # default balanced
     assert s.entity_cap("nonsense") == s.extract_entity_cap_balanced
+
+
+def test_visual_enrichment_defaults():
+    s = Settings(_env_file=None)
+    assert s.openai_vision_model == "gpt-4o-mini"
+    assert s.ollama_vision_model == "llava"
+    assert s.screenshot_viewport_width == 1280
+    assert s.screenshot_timeout_ms == 15000
+    assert s.screenshot_max_segments == 4
+
+
+def test_visual_env_override(monkeypatch):
+    monkeypatch.setenv("ALEX_OLLAMA_VISION_MODEL", "minicpm-v")
+    monkeypatch.setenv("ALEX_SCREENSHOT_MAX_SEGMENTS", "2")
+    s = Settings(_env_file=None)
+    assert s.ollama_vision_model == "minicpm-v"
+    assert s.screenshot_max_segments == 2
