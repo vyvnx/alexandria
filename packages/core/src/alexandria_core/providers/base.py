@@ -44,3 +44,7 @@ class LLMProvider(Protocol):
 
 class EmbeddingProvider(Protocol):
     def embed(self, texts: list[str], *, kind: Literal["query", "document"]) -> list[Vector]: ...
+
+
+class VisionProvider(Protocol):
+    def describe_image(self, images: list[bytes], prompt: str) -> str: ...
