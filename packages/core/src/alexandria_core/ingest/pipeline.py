@@ -7,10 +7,18 @@ from ..graph import similarity
 from ..logging_config import get_logger
 from ..providers.base import LLMProvider, EmbeddingProvider
 from .loaders import load_url
+from .render import screenshot as _screenshot
 from .resolve import resolve
 from .salience import rank_entities
 
 log = get_logger("ingest")
+
+VISION_PROMPT = (
+    "You are reading screenshots of a web page. Transcribe any tables as markdown "
+    "and describe charts, figures, and infographics in prose. Report only the page's "
+    "content; ignore navigation, ads, and boilerplate. If there is no meaningful "
+    "visual content, reply with nothing."
+)
 
 
 @dataclass
@@ -27,7 +35,8 @@ class IngestResult:
 
 def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
            settings: Settings, *, url=None, note=None, fetch=None,
-           abstraction=None) -> IngestResult:
+           abstraction=None, visual: bool = False, vision=None,
+           render_fn=None) -> IngestResult:
     level = abstraction or settings.extraction_abstraction
     log.info("ingest start: url=%s note=%s abstraction=%s",
              url or "-", "yes" if note else "no", level)
@@ -37,12 +46,25 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     title = (doc.title if doc and doc.title else None) or (url or "Note")
     article = doc.text if doc else ""
 
+    # 1b. visual enrichment (opt-in): screenshot the page and let a vlm read the
+    #     tables/charts/figures trafilatura drops. best-effort — any failure
+    #     degrades to a text-only ingest.
+    vlm_text = ""
+    if visual and url and vision is not None:
+        try:
+            imgs = (render_fn or _screenshot)(url, settings=settings)
+            vlm_text = vision.describe_image(imgs, VISION_PROMPT) if imgs else ""
+        except Exception:
+            log.warning("visual enrichment failed for %s — skipping", url)
+
     # 2. Assemble (keep article vs. my-take distinguishable)
     parts = []
     if article:
         parts.append("ARTICLE:\n" + article)
     if note:
         parts.append("MY TAKE:\n" + note)
+    if vlm_text:
+        parts.append("VISUAL CONTENT:\n" + vlm_text)
     combined = "\n\n".join(parts) or title
 
     # 3. Summarize
