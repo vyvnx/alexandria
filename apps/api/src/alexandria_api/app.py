@@ -20,9 +20,12 @@ class IngestBody(BaseModel):
     note: str | None = None
     # How much to pull from this source. None ⇒ the server's default level.
     abstraction: Literal["abstract", "balanced", "exhaustive"] | None = None
+    # opt-in: screenshot the page and let a VLM read tables/charts (needs a url)
+    visual: bool = False
 
 
-def create_app(store=None, llm=None, embedder=None, settings: Settings | None = None) -> FastAPI:
+def create_app(store=None, llm=None, embedder=None, settings: Settings | None = None,
+               vision=None) -> FastAPI:
     configure_logging()
     settings = settings or get_settings()
     if store is None:
@@ -30,6 +33,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         store.init_schema()
     llm = llm or factory.build_llm(settings)
     embedder = embedder or factory.build_embedder(settings)
+    vision = vision or factory.build_vision(settings)
 
     log.info("Alexandria API ready — db=%s llm=%s vec=%s",
              settings.db_path, settings.llm, store.vec_available)
@@ -39,6 +43,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     app = FastAPI(title="Alexandria")
     app.state.store, app.state.llm, app.state.embedder, app.state.settings = (
         store, llm, embedder, settings)
+    app.state.vision = vision
 
     def _node_dict(n):
         return {"id": n.id, "kind": n.kind, "name": n.name, "data": n.data}
@@ -67,7 +72,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             raise HTTPException(400, "provide url and/or note")
         try:
             res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
-                         abstraction=body.abstraction)
+                         abstraction=body.abstraction, visual=body.visual, vision=vision)
         except Exception:
             log.exception("ingest failed for url=%s", body.url)
             raise HTTPException(500, "ingest failed — see server logs")

@@ -92,3 +92,55 @@ def test_ingest_rejects_unknown_abstraction(client):
     c, _ = client
     r = c.post("/ingest", json={"note": "x", "abstraction": "nope"})
     assert r.status_code == 422
+
+
+def test_ingest_passes_visual_flag_to_pipeline(client, monkeypatch):
+    from dataclasses import dataclass
+    c, _ = client
+    seen = {}
+
+    @dataclass
+    class _Res:
+        source_id: int = 1
+        title: str = "t"
+        summary: str = "s"
+        nodes_added: int = 0
+        nodes_reused: int = 0
+        typed_edges_added: int = 0
+        similar_edges_added: int = 0
+        node_ids: tuple = ()
+
+    def _spy(*a, **kw):
+        seen.update(kw)
+        return _Res()
+
+    monkeypatch.setattr("alexandria_api.app.ingest", _spy)
+    r = c.post("/ingest", json={"note": "n", "visual": True})
+    assert r.status_code == 200
+    assert seen["visual"] is True
+
+
+def test_ingest_visual_defaults_false(client, monkeypatch):
+    from dataclasses import dataclass
+    c, _ = client
+    seen = {}
+
+    @dataclass
+    class _Res:
+        source_id: int = 1
+        title: str = "t"
+        summary: str = "s"
+        nodes_added: int = 0
+        nodes_reused: int = 0
+        typed_edges_added: int = 0
+        similar_edges_added: int = 0
+        node_ids: tuple = ()
+
+    def _spy(*a, **kw):
+        seen.update(kw)
+        return _Res()
+
+    monkeypatch.setattr("alexandria_api.app.ingest", _spy)
+    r = c.post("/ingest", json={"note": "n"})
+    assert r.status_code == 200
+    assert seen["visual"] is False
