@@ -63,7 +63,7 @@ export const api = {
 
   search: (q: string) => request<SearchHit[]>(`/search?q=${encodeURIComponent(q)}`),
 
-  ingest: (body: { url?: string; note?: string; abstraction?: Abstraction }) =>
+  ingest: (body: { url?: string; note?: string; abstraction?: Abstraction; visual?: boolean }) =>
     request<IngestResult>("/ingest", {
       method: "POST",
       body: JSON.stringify(body),

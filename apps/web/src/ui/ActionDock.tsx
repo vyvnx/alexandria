@@ -58,6 +58,7 @@ export function ActionDock({
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
   const [abstraction, setAbstraction] = useState<Abstraction>(defaultAbstraction);
+  const [visual, setVisual] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,6 +78,7 @@ export function ActionDock({
     if (mode === "add") {
       urlRef.current?.focus();
       setAbstraction(defaultAbstraction);
+      setVisual(false);
     }
   }, [mode, defaultAbstraction]);
 
@@ -167,11 +169,13 @@ export function ActionDock({
         url: url.trim() || undefined,
         note: note.trim() || undefined,
         abstraction,
+        visual,
       });
       onIngested(result);
       setUrl("");
       setNote("");
       setAbstraction(defaultAbstraction);
+      setVisual(false);
     } catch (err) {
       // Panel is gone — surface the failure as a toast and keep the inputs so
       // reopening Add lets the user retry without retyping.
@@ -315,6 +319,34 @@ export function ActionDock({
               {ABSTRACTION_META[abstraction].hint}
             </p>
           </div>
+
+          {/* opt-in visual capture — screenshot + vlm reads tables/charts */}
+          <label className="flex items-center justify-between gap-3">
+            <span className="flex flex-col">
+              <span className="font-mono text-[0.72rem] tracking-[0.12em] text-vellum-dim uppercase">
+                Capture visuals
+              </span>
+              <span className="text-[0.72rem] leading-snug text-vellum-dim">
+                Screenshot the page so tables and charts join the graph. Slower.
+              </span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={visual}
+              aria-label="Capture visuals"
+              onClick={() => setVisual((v) => !v)}
+              className={`relative h-5 w-9 flex-none rounded-full border transition ${
+                visual ? "border-brass/60 bg-brass/30" : "border-line/60 bg-void-2/80"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 size-3.5 rounded-full bg-vellum transition-all ${
+                  visual ? "left-4" : "left-0.5"
+                }`}
+              />
+            </button>
+          </label>
 
           {error && (
             <p className="text-rose text-[0.82rem]" role="alert">
