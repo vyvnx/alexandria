@@ -7,7 +7,10 @@ from rapidfuzz import fuzz
 from ..config import Settings
 from ..graph.store import GraphStore
 from ..graph.models import KIND_ENTITY, KIND_CONCEPT
+from ..logging_config import get_logger
 from ..providers.base import ExtractedNode, LLMProvider, Vector
+
+log = get_logger("ingest")
 
 _KIND = {"entity": KIND_ENTITY, "concept": KIND_CONCEPT}
 _ARTICLES = {"the", "a", "an"}
@@ -45,6 +48,32 @@ def _cosine(a: Vector, b: Vector) -> float:
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(x * x for x in b))
     return dot / (na * nb) if na and nb else 0.0
+
+
+def drop_dismissed(store: GraphStore, extracted: list[ExtractedNode], vectors: list[Vector],
+                   settings: Settings) -> tuple[list[ExtractedNode], list[Vector]]:
+    """Suppress topics the user dismissed as "not interested": drop any extracted
+    node matching a dismissed record by canonical name, or by embedding cosine
+    >= merge_threshold (the resolver's "same node" question)."""
+    dismissed = store.all_dismissed()
+    if not dismissed:
+        return list(extracted), list(vectors)
+    canon_dismissed = {canonical_name(name): name for name, _ in dismissed}
+    kept_nodes: list[ExtractedNode] = []
+    kept_vecs: list[Vector] = []
+    for node, vec in zip(extracted, vectors):
+        match = canon_dismissed.get(canonical_name(node.name))
+        if match is None:
+            for name, dvec in dismissed:
+                if dvec is not None and _cosine(vec, dvec) >= settings.merge_threshold:
+                    match = name
+                    break
+        if match is not None:
+            log.info("suppressed dismissed topic: %r (matches %r)", node.name, match)
+            continue
+        kept_nodes.append(node)
+        kept_vecs.append(vec)
+    return kept_nodes, kept_vecs
 
 
 @dataclass
