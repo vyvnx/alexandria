@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from api.app import create_app
+from src.app import create_app
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.providers.fake import FakeLLM, FakeEmbedder
 from alexandria_core.config import Settings
@@ -114,7 +114,7 @@ def test_ingest_passes_visual_flag_to_pipeline(client, monkeypatch):
         seen.update(kw)
         return _Res()
 
-    monkeypatch.setattr("api.app.ingest", _spy)
+    monkeypatch.setattr("src.app.ingest", _spy)
     r = c.post("/ingest", json={"note": "n", "visual": True})
     assert r.status_code == 200
     assert seen["visual"] is True
@@ -140,7 +140,7 @@ def test_ingest_visual_defaults_false(client, monkeypatch):
         seen.update(kw)
         return _Res()
 
-    monkeypatch.setattr("api.app.ingest", _spy)
+    monkeypatch.setattr("src.app.ingest", _spy)
     r = c.post("/ingest", json={"note": "n"})
     assert r.status_code == 200
     assert seen["visual"] is False

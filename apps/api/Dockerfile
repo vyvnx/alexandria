@@ -26,4 +26,4 @@ WORKDIR /app
 COPY --from=builder /app /app
 ENV PATH="/app/.venv/bin:$PATH" ALEX_DB_PATH=/data/alexandria.db
 EXPOSE 8000
-CMD ["python", "-m", "api"]
+CMD ["python", "-m", "src"]
