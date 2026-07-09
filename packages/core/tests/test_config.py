@@ -6,7 +6,7 @@ from alexandria_core.config import Settings
 def test_relative_db_path_resolves_to_repo_root_absolute(monkeypatch, tmp_path):
     # The bug this guards: sqlite resolves a relative db_path against the process
     # CWD, so the same setting points at different files depending on where the
-    # app is launched (apps/api vs repo root) — silently splitting the graph
+    # app is launched (apps/http vs repo root) — silently splitting the graph
     # across two .db files. Anchoring to the repo root makes it absolute and
     # CWD-independent.
     monkeypatch.chdir(tmp_path)  # launch from anywhere

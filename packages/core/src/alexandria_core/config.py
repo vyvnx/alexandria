@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Repo root, resolved from this file so paths are stable regardless of the
 # process CWD. Each app's `dev`/`test` script runs from its own folder
-# (apps/api, ...), so anything resolved against the CWD would silently differ
+# (apps/http, ...), so anything resolved against the CWD would silently differ
 # depending on where the app is launched from.
 # config.py -> alexandria_core -> src -> core -> packages -> repo root
 _REPO_ROOT = Path(__file__).resolve().parents[4]

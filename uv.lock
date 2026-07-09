@@ -8,9 +8,9 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "alexandria-api",
     "alexandria-core",
     "alexandria-engine",
+    "alexandria-http",
 ]
 
 [manifest.dependency-groups]
@@ -18,32 +18,6 @@ dev = [
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=5" },
 ]
-
-[[package]]
-name = "alexandria-api"
-version = "0.1.0"
-source = { editable = "apps/api" }
-dependencies = [
-    { name = "alexandria-core" },
-    { name = "alexandria-engine" },
-    { name = "fastapi" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.optional-dependencies]
-ml = [
-    { name = "alexandria-engine", extra = ["ml"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alexandria-core", editable = "packages/core" },
-    { name = "alexandria-engine", editable = "apps/engine" },
-    { name = "alexandria-engine", extras = ["ml"], marker = "extra == 'ml'", editable = "apps/engine" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-]
-provides-extras = ["ml"]
 
 [[package]]
 name = "alexandria-core"
@@ -97,6 +71,32 @@ requires-dist = [
     { name = "ollama", specifier = ">=0.3" },
     { name = "openai", specifier = ">=1.40" },
     { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=3.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+]
+provides-extras = ["ml"]
+
+[[package]]
+name = "alexandria-http"
+version = "0.1.0"
+source = { editable = "apps/http" }
+dependencies = [
+    { name = "alexandria-core" },
+    { name = "alexandria-engine" },
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+ml = [
+    { name = "alexandria-engine", extra = ["ml"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alexandria-core", editable = "packages/core" },
+    { name = "alexandria-engine", editable = "apps/engine" },
+    { name = "alexandria-engine", extras = ["ml"], marker = "extra == 'ml'", editable = "apps/engine" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 provides-extras = ["ml"]

@@ -2,14 +2,14 @@
 # Each app builds its own image from the repo-root context (see apps/*/Dockerfile).
 #   docker compose up --build
 #
-# Note: in v1 the API embeds the engine in-process, so `api` runs standalone.
+# Note: in v1 the API embeds the engine in-process, so `http` runs standalone.
 # The `engine` service is the seam for splitting ML/GPU compute onto its own box;
 # point the API at it over HTTP when that wiring lands.
 services:
-  api:
+  http:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: apps/http/Dockerfile
     ports:
       - "8000:8000"
     environment:

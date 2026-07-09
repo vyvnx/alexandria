@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from src.app import create_app
+from api.app import create_app
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.providers.fake import FakeLLM, FakeEmbedder
 from alexandria_core.config import Settings
@@ -14,6 +14,16 @@ def client():
     app = create_app(store=store, llm=FakeLLM(), embedder=FakeEmbedder(),
                      settings=Settings(_env_file=None, llm="fake"))
     return TestClient(app), store
+
+
+def _ingest(c, **body):
+    """POST an ingest and return the finished job's result. Ingest runs in a
+    background task, which TestClient drives to completion before the POST
+    returns — so one status GET already sees the job done."""
+    job_id = c.post("/ingest", json=body).json()["job_id"]
+    job = c.get(f"/ingest/{job_id}").json()
+    assert job["status"] == "done", job
+    return job["result"]
 
 
 def test_healthz(client):
@@ -55,10 +65,8 @@ def test_config_reflects_overridden_settings():
 
 def test_ingest_note_then_graph_and_search(client):
     c, _ = client
-    r = c.post("/ingest", json={"note": "Attention mechanisms power transformers."})
-    assert r.status_code == 200
-    body = r.json()
-    assert body["source_id"] > 0
+    res = _ingest(c, note="Attention mechanisms power transformers.")
+    assert res["source_id"] > 0
 
     g = c.get("/graph").json()
     assert len(g["nodes"]) >= 1
@@ -70,10 +78,30 @@ def test_ingest_note_then_graph_and_search(client):
 
 def test_node_detail(client):
     c, _ = client
-    sid = c.post("/ingest", json={"note": "Graphs model relationships."}).json()["source_id"]
+    sid = _ingest(c, note="Graphs model relationships.")["source_id"]
     d = c.get(f"/node/{sid}").json()
     assert d["node"]["id"] == sid
     assert "neighbors" in d
+
+
+def test_ingest_status_unknown_job_404(client):
+    c, _ = client
+    assert c.get("/ingest/nope").status_code == 404
+
+
+def test_ingest_job_reports_failure_stage(client, monkeypatch):
+    c, _ = client
+
+    def _boom(*a, **kw):
+        kw["on_stage"]("embedding")  # advance a stage, then fail mid-run
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr("api.app.ingest", _boom)
+    job_id = c.post("/ingest", json={"note": "n"}).json()["job_id"]
+    job = c.get(f"/ingest/{job_id}").json()
+    assert job["status"] == "failed"
+    assert job["stage"] == "embedding"  # last stage retained
+    assert "see server logs" in job["error"]
 
 
 def test_ingest_requires_input(client):
@@ -114,7 +142,7 @@ def test_ingest_passes_visual_flag_to_pipeline(client, monkeypatch):
         seen.update(kw)
         return _Res()
 
-    monkeypatch.setattr("src.app.ingest", _spy)
+    monkeypatch.setattr("api.app.ingest", _spy)
     r = c.post("/ingest", json={"note": "n", "visual": True})
     assert r.status_code == 200
     assert seen["visual"] is True
@@ -140,7 +168,7 @@ def test_ingest_visual_defaults_false(client, monkeypatch):
         seen.update(kw)
         return _Res()
 
-    monkeypatch.setattr("src.app.ingest", _spy)
+    monkeypatch.setattr("api.app.ingest", _spy)
     r = c.post("/ingest", json={"note": "n"})
     assert r.status_code == 200
     assert seen["visual"] is False

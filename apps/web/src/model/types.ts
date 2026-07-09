@@ -85,6 +85,27 @@ export interface IngestResult {
   node_ids: number[];
 }
 
+/* Progress of a backgrounded ingest, polled from GET /ingest/{job_id}. `stage`
+   is the pipeline's current step (see ingest/pipeline.py); the UI maps it to a
+   caption + bar fill. `result` lands when status is "done". */
+export type IngestStage =
+  | "queued"
+  | "loading"
+  | "visuals"
+  | "summarizing"
+  | "extracting"
+  | "embedding"
+  | "resolving"
+  | "relating"
+  | "linking";
+
+export interface IngestJob {
+  status: "running" | "done" | "failed";
+  stage: IngestStage;
+  result: IngestResult | null;
+  error: string | null;
+}
+
 export interface Health {
   ok: boolean;
   vec: boolean;

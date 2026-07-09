@@ -1,8 +1,9 @@
+import uuid
 from dataclasses import asdict
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -66,17 +67,37 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             "extraction_abstraction": s.extraction_abstraction,
         }
 
-    @app.post("/ingest")
-    def do_ingest(body: IngestBody):
-        if not body.url and not body.note:
-            raise HTTPException(400, "provide url and/or note")
+    # Ingest runs in the background so the UI can poll real stage progress.
+    # ponytail: unbounded in-memory dict — one small entry per ingest, single
+    # user, lost on restart. Add an LRU cap only if it ever grows.
+    jobs: dict[str, dict] = {}
+
+    def _run_ingest(job_id: str, body: IngestBody):
+        job = jobs[job_id]
         try:
             res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
-                         abstraction=body.abstraction, visual=body.visual, vision=vision)
+                         abstraction=body.abstraction, visual=body.visual, vision=vision,
+                         on_stage=lambda s: job.update(stage=s))
+            job.update(status="done", result=asdict(res))
         except Exception:
             log.exception("ingest failed for url=%s", body.url)
-            raise HTTPException(500, "ingest failed — see server logs")
-        return asdict(res)
+            job.update(status="failed", error="ingest failed — see server logs")
+
+    @app.post("/ingest")
+    def do_ingest(body: IngestBody, background: BackgroundTasks):
+        if not body.url and not body.note:
+            raise HTTPException(400, "provide url and/or note")
+        job_id = uuid.uuid4().hex
+        jobs[job_id] = {"status": "running", "stage": "queued", "result": None, "error": None}
+        background.add_task(_run_ingest, job_id, body)
+        return {"job_id": job_id}
+
+    @app.get("/ingest/{job_id}")
+    def ingest_status(job_id: str):
+        job = jobs.get(job_id)
+        if job is None:
+            raise HTTPException(404, "unknown job")
+        return job
 
     @app.get("/graph")
     def graph(node_id: int | None = None, k: int = 2):

@@ -34,7 +34,7 @@ pnpm dev           # turbo runs every app
 or one at a time:
 
 ```sh
-cd apps/api && uv run python -m api   # http://localhost:8000
+cd apps/http && uv run python -m api   # http://localhost:8000
 cd apps/web && pnpm dev                          # vite dev server
 ```
 

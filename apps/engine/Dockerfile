@@ -11,7 +11,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY packages/core/pyproject.toml packages/core/pyproject.toml
 COPY apps/engine/pyproject.toml apps/engine/pyproject.toml
-COPY apps/api/pyproject.toml apps/api/pyproject.toml
+COPY apps/http/pyproject.toml apps/http/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --package alexandria-engine --extra ml --no-install-workspace --no-dev
 

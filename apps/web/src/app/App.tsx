@@ -19,6 +19,7 @@ import type {
   GraphResponse,
   Health,
   IngestResult,
+  IngestStage,
   NodeDetail,
   NodeId,
   NodeKind,
@@ -49,7 +50,7 @@ export function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<NodeDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [ingesting, setIngesting] = useState(false);
+  const [ingestStage, setIngestStage] = useState<IngestStage | null>(null);
   const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(
     null,
   );
@@ -183,8 +184,7 @@ export function App() {
               The sky is empty
             </h2>
             <p className="mt-1 text-vellum-dim">
-              Chart your first source to begin the atlas — paste a link and your
-              thoughts on it.
+              Click add or press N to start
             </p>
           </div>
         </div>
@@ -201,12 +201,12 @@ export function App() {
       <ActionDock
         onPick={focusAndSelect}
         onIngested={handleIngested}
-        onBusyChange={setIngesting}
+        onStage={setIngestStage}
         onIngestError={(msg) => setToast({ msg, error: true })}
         defaultAbstraction={config.extraction_abstraction}
       />
 
-      <ChartProgress active={ingesting} />
+      <ChartProgress stage={ingestStage} />
 
       <NodeInspector
         detail={detail}

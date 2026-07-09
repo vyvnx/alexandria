@@ -56,7 +56,7 @@ Set `ALEX_API_URL` to point the dev proxy at a different backend.
 pnpm --filter @alexandria/web build          # → apps/web/dist
 ```
 
-`apps/api` auto-mounts `apps/web/dist` at `/`, so the production backend serves
+`apps/http` auto-mounts `apps/web/dist` at `/`, so the production backend serves
 the SPA directly — no separate web server.
 
 ## Test / typecheck

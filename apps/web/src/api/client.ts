@@ -6,7 +6,7 @@ import type {
   Abstraction,
   GraphResponse,
   Health,
-  IngestResult,
+  IngestJob,
   NodeDetail,
   SearchHit,
   VizConfig,
@@ -63,9 +63,13 @@ export const api = {
 
   search: (q: string) => request<SearchHit[]>(`/search?q=${encodeURIComponent(q)}`),
 
+  /** Kick off an ingest; returns a job id to poll with `ingestStatus`. */
   ingest: (body: { url?: string; note?: string; abstraction?: Abstraction; visual?: boolean }) =>
-    request<IngestResult>("/ingest", {
+    request<{ job_id: string }>("/ingest", {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  /** Current stage/status of a running ingest job. */
+  ingestStatus: (jobId: string) => request<IngestJob>(`/ingest/${jobId}`),
 };

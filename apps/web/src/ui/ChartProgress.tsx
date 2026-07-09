@@ -1,19 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 
-import { nextTrickle } from "./trickle";
+import { INGEST_STAGES } from "../model/ingest";
+import type { IngestStage } from "../model/types";
 
 /* A thin progress bar pinned bottom-center while a source is being charted.
-   The /ingest request is opaque (one round-trip, no real %), so this is a
-   *simulated* indicator: it creeps toward ~90% while `active`, then snaps to
-   100% and fades out when charting finishes. See `trickle.ts` for the math.
+   Driven by the ingest job's *real* stage (polled in ActionDock): each stage
+   snaps the bar to a fixed milestone and shows its caption (see model/ingest.ts).
+   When the job settles (stage → null) the bar completes to 100% and fades.
 
-   A rocket rides the leading edge — the brass bar is its trail — and a rotating
-   caption sits above the rail hinting at what's happening. */
+   A rocket rides the leading edge — the brass bar is its trail — and the caption
+   above the rail names the current step. */
 
-const START = 12; // a visible head start the instant charting begins
-const TICK_MS = 320; // cadence of the bar's creep
 const SETTLE_MS = 480; // hold at 100% before fading away
-const MESSAGE_MS = 6000; // how long each caption lingers before the next
 
 // ── Rocket sprite ───────────────────────────────────────────────────────────
 // Swap this single constant for any glyph you like (🛰️, ✦, ➤, 🚀…). For a real
@@ -22,54 +20,33 @@ const MESSAGE_MS = 6000; // how long each caption lingers before the next
 // (the direction of travel) at render time.
 const ROCKET = "🚀";
 
-// Rotating loader copy. Index 0 shows the instant charting starts; the rest
-// cycle while the bar climbs. Reorder or edit these freely.
-const CHARTING_MESSAGES = [
-  "Charting…",
-  "Mapping the stars…",
-  "Plotting constellations…",
-  "Triangulating coordinates…",
-  "Inking the atlas…",
-];
-
-export function ChartProgress({ active }: { active: boolean }) {
+export function ChartProgress({ stage }: { stage: IngestStage | null }) {
   const [progress, setProgress] = useState(0);
   const [visible, setVisible] = useState(false);
-  const [msgIndex, setMsgIndex] = useState(0);
-  // Read inside the effect without making it a dependency (would restart the
-  // creep on every tick). Mirrors `visible` so the falling edge sees the truth.
+  const [message, setMessage] = useState("Charting…");
+  // Mirror `visible` so the falling edge (stage → null) sees the truth without
+  // making it an effect dependency.
   const visibleRef = useRef(false);
   visibleRef.current = visible;
 
   useEffect(() => {
-    if (active) {
+    if (stage) {
+      const { label, percent } = INGEST_STAGES[stage];
       setVisible(true);
-      setProgress((p) => (p < START ? START : p));
-      setMsgIndex(0); // always open on the plain "Charting…"
-      const tick = setInterval(
-        () => setProgress((p) => nextTrickle(p)),
-        TICK_MS,
-      );
-      const cycle = setInterval(
-        () => setMsgIndex((i) => (i + 1) % CHARTING_MESSAGES.length),
-        MESSAGE_MS,
-      );
-      return () => {
-        clearInterval(tick);
-        clearInterval(cycle);
-      };
+      setMessage(`${label}…`);
+      setProgress(percent);
+      return;
     }
-    // Not charting. If the bar was up, finish it off; otherwise stay hidden.
+    // Job settled. If the bar was up, finish it off; otherwise stay hidden.
     if (!visibleRef.current) return;
     setProgress(100);
+    setMessage("Charted");
     const id = setTimeout(() => {
       setVisible(false);
       setProgress(0);
     }, SETTLE_MS);
     return () => clearTimeout(id);
-  }, [active]);
-
-  const message = CHARTING_MESSAGES[msgIndex];
+  }, [stage]);
 
   return (
     <div

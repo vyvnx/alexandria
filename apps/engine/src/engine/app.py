@@ -2,7 +2,7 @@
 
 In v1 the API imports the engine in-process (via `factory`). This thin service is
 the seam for later running the engine as its own container — e.g. on a GPU box —
-so `apps/api` can call `/embed` over the network instead of loading torch itself.
+so `apps/http` can call `/embed` over the network instead of loading torch itself.
 """
 from typing import Literal
 

@@ -3,12 +3,37 @@ import { useEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import { kindColor } from "../model/graph";
+import { INGEST_STAGES } from "../model/ingest";
 import {
   ABSTRACTION_LEVELS,
   type Abstraction,
   type IngestResult,
+  type IngestStage,
   type SearchHit,
 } from "../model/types";
+
+const POLL_MS = 500;
+
+/* Poll a running ingest to completion, reporting each stage as it arrives.
+   Resolves with the result on success; throws a stage-aware ApiError on
+   failure. */
+async function pollIngest(
+  jobId: string,
+  onStage: (s: IngestStage) => void,
+): Promise<IngestResult> {
+  for (;;) {
+    const job = await api.ingestStatus(jobId);
+    onStage(job.stage);
+    if (job.status === "done" && job.result) return job.result;
+    if (job.status === "failed") {
+      throw new ApiError(
+        `Failed while ${INGEST_STAGES[job.stage].label.toLowerCase()} — see server logs.`,
+        500,
+      );
+    }
+    await new Promise((r) => setTimeout(r, POLL_MS));
+  }
+}
 
 // Slider stops, least → most pulled. The tick sits under the thumb; the hint
 // explains what this level does to the graph.
@@ -36,15 +61,15 @@ type Mode = "none" | "search" | "add";
 export function ActionDock({
   onPick,
   onIngested,
-  onBusyChange,
+  onStage,
   onIngestError,
   defaultAbstraction,
 }: {
   onPick: (id: number) => void;
   onIngested: (r: IngestResult) => void;
-  /** Fires true when an ingest starts, false when it settles — drives the
-      page-level charting progress bar. */
-  onBusyChange?: (busy: boolean) => void;
+  /** Reports the ingest's current stage as it's polled, null when idle —
+      drives the page-level charting progress bar. */
+  onStage?: (stage: IngestStage | null) => void;
   /** An ingest failed after the panel closed — surfaced as a page toast. */
   onIngestError?: (message: string) => void;
   defaultAbstraction: Abstraction;
@@ -161,16 +186,17 @@ export function ActionDock({
       return;
     }
     setBusy(true);
-    onBusyChange?.(true);
+    onStage?.("queued");
     setError(null);
     setMode("none"); // close immediately — the bottom bar now carries progress
     try {
-      const result = await api.ingest({
+      const { job_id } = await api.ingest({
         url: url.trim() || undefined,
         note: note.trim() || undefined,
         abstraction,
         visual,
       });
+      const result = await pollIngest(job_id, (s) => onStage?.(s));
       onIngested(result);
       setUrl("");
       setNote("");
@@ -182,7 +208,7 @@ export function ActionDock({
       onIngestError?.(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
     } finally {
       setBusy(false);
-      onBusyChange?.(false);
+      onStage?.(null);
     }
   }
 

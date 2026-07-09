@@ -54,7 +54,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     strategy:
       matrix:
-        app: [api, engine]
+        app: [http, engine]
     steps:
       - uses: actions/checkout@v4
 

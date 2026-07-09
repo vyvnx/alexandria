@@ -36,12 +36,15 @@ class IngestResult:
 def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
            settings: Settings, *, url=None, note=None, fetch=None,
            abstraction=None, visual: bool = False, vision=None,
-           render_fn=None) -> IngestResult:
+           render_fn=None, on_stage=None) -> IngestResult:
     level = abstraction or settings.extraction_abstraction
+    report = on_stage or (lambda _s: None)  # stage progress callback; no-op if unset
     log.info("ingest start: url=%s note=%s abstraction=%s",
              url or "-", "yes" if note else "no", level)
 
     # 1. Load
+    if url:
+        report("loading")
     doc = load_url(url, fetch=fetch) if url else None
     title = (doc.title if doc and doc.title else None) or (url or "Note")
     article = doc.text if doc else ""
@@ -52,6 +55,7 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     vlm_text = ""
     if visual and url and vision is not None:
         try:
+            report("visuals")
             imgs = (render_fn or _screenshot)(url, settings=settings)
             vlm_text = vision.describe_image(imgs, VISION_PROMPT) if imgs else ""
         except Exception:
@@ -68,20 +72,26 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     combined = "\n\n".join(parts) or title
 
     # 3. Summarize
+    report("summarizing")
     summary = llm.summarize(combined)
     log.debug("summarized (%d chars in, %d chars out)", len(combined), len(summary))
 
     # 4. Extract (the abstraction level steers how selective the extractor is)
+    report("extracting")
     extraction = llm.extract(combined, abstraction=level)
     entities = list(extraction.entities)
     concepts = list(extraction.concepts)
     log.info("extracted %d entities, %d concepts from %r",
              len(entities), len(concepts), title)
+    log.debug("raw entities: %r", entities)
+    log.debug("raw concepts: %r", concepts)
 
     # 5. Embed (source + each extracted node — name + description)
+    report("embedding")
     src_vec = embedder.embed([combined], kind="document")[0]
     ent_texts = [f"{n.name}. {n.description}".strip() for n in entities]
     con_texts = [f"{n.name}. {n.description}".strip() for n in concepts]
+    log.debug("texts to embed: %r", ent_texts + con_texts)
     ent_vecs = embedder.embed(ent_texts, kind="document") if ent_texts else []
     con_vecs = embedder.embed(con_texts, kind="document") if con_texts else []
 
@@ -108,6 +118,7 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
 
     # 6. Resolve extracted nodes against the store and within this batch.
     #    Uses merge/ambiguous/fuzzy knobs; the LLM is consulted only for the gray band.
+    report("resolving")
     resolutions = resolve(store, extracted, node_vecs, settings=settings, llm=llm)
 
     # 9a. Persist new nodes (or reuse) — build name -> id map
@@ -134,6 +145,7 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     touched_ids = list(dict.fromkeys([source_id, *name_to_id.values()]))
 
     # 7. Relate — source -> node (mentions/about) + node <-> node typed edges
+    report("relating")
     typed_edges = 0
     for r in resolutions:
         nid = name_to_id[r.extracted.name]
@@ -148,6 +160,7 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
                 typed_edges += 1
 
     # 8. Similar — top-k per newly added node
+    report("linking")
     similar_edges = 0
     for nid in new_node_ids:
         vec = next(r.vector for r in resolutions if name_to_id.get(r.extracted.name) == nid)
