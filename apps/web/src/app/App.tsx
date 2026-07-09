@@ -2,7 +2,6 @@ import { AlertTriangle, Sparkles, Telescope } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api/client";
-import alexandriaIcon from "../assets/alexandria-icon.png";
 import { useGraphEngine } from "../hooks/useGraphEngine";
 import { detectGalaxies } from "../model/galaxies";
 import { buildGraph } from "../model/graph";
