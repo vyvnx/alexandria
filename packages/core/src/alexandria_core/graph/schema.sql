@@ -36,3 +36,10 @@ CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst_id);
 CREATE INDEX IF NOT EXISTS idx_nodes_kind ON nodes(kind);
 CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_edges ON edges(src_id, dst_id, type);
+CREATE TABLE IF NOT EXISTS dismissed (
+  id           INTEGER PRIMARY KEY,
+  name         TEXT NOT NULL,
+  kind         TEXT NOT NULL,
+  embedding    BLOB,
+  dismissed_at TEXT NOT NULL
+);
