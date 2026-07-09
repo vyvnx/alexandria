@@ -150,3 +150,19 @@ def test_visual_degrades_when_render_raises():
                  visual=True, vision=FakeVision(), render_fn=boom)
     assert res.source_id > 0  # ingest still succeeded despite the render failure
     store.close()
+
+
+def test_dismissed_topic_suppressed_on_ingest(built):
+    store = built["store"]
+    # dismiss the concept "attention" before ingesting a note that re-mentions it.
+    # FakeLLM extracts lowercase words >= 4 chars as concepts, so the note below
+    # yields "attention", "powers", "transformers".
+    nid = store.add_node(KIND_CONCEPT, "attention")
+    store.dismiss_node(nid)
+
+    ingest(store, built["llm"], built["embedder"], built["settings"],
+           note="attention powers transformers", fetch=lambda u: None)
+
+    names = [n.name for n in store.all_nodes()]
+    assert "attention" not in names   # suppressed by the dismissal
+    assert "powers" in names          # non-dismissed concepts still land

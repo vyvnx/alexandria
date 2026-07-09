@@ -39,6 +39,21 @@ _EXTRACT_JSON = (
     'Return JSON {"entities":[{"name","type","description"}],'
     '"concepts":[{"name","description"}]}. Keep names canonical and short.'
 )
+# purpose framing shared by every abstraction level: the extraction builds a
+# personal knowledge map, so page furniture and source administrivia are
+# excluded outright. the levels below only steer entity selectivity.
+_EXTRACT_FRAME = (
+    "You are building a personal knowledge map of topics the reader is learning about. "
+    "Concepts are knowledge topics one can be interested in and explore further — "
+    "disciplines, ideas, techniques, technologies, methods, historical periods "
+    '(e.g. "cloud solution design", "Victorian era", "spaced repetition"). '
+    "Include something only if it would be a meaningful topic on that map.\n"
+    "NEVER extract:\n"
+    "- website boilerplate: donation or membership platforms, newsletters, "
+    "subscription or paywall prompts, social media links, cookie banners, site navigation;\n"
+    "- administrivia about the source or its subject's logistics: exam scoring, "
+    "registration, fees, pricing, schedules, shipping, terms of service, author bios.\n"
+)
 # How selective the extractor is, by abstraction level. Concepts stay broad at
 # every level; the levels differ in how aggressively they prune entities.
 _EXTRACT_SELECTIVITY = {
@@ -60,7 +75,7 @@ _EXTRACT_SELECTIVITY = {
 def extract_sys(abstraction: str) -> str:
     """System prompt for the extractor at a given abstraction level."""
     lead = _EXTRACT_SELECTIVITY.get(abstraction, _EXTRACT_SELECTIVITY["balanced"])
-    return lead + _EXTRACT_JSON
+    return _EXTRACT_FRAME + lead + _EXTRACT_JSON
 _RELATE_SYS = (
     "Given a list of node names and the source text, return typed relations among them as JSON "
     '{"relations":[{"src_name","dst_name","type","evidence"}]}. '

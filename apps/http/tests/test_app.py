@@ -5,6 +5,7 @@ from api.app import create_app
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.providers.fake import FakeLLM, FakeEmbedder
 from alexandria_core.config import Settings
+from alexandria_core.graph.models import KIND_CONCEPT
 
 
 @pytest.fixture
@@ -172,3 +173,24 @@ def test_ingest_visual_defaults_false(client, monkeypatch):
     r = c.post("/ingest", json={"note": "n"})
     assert r.status_code == 200
     assert seen["visual"] is False
+
+
+def test_dismiss_node(client):
+    c, store = client
+    nid = store.add_node(KIND_CONCEPT, "Patreon")
+    r = c.post(f"/node/{nid}/dismiss")
+    assert r.status_code == 200
+    assert r.json() == {"dismissed": "Patreon"}
+    g = c.get("/graph").json()
+    assert all(n["id"] != nid for n in g["nodes"])
+
+
+def test_dismiss_unknown_node_404(client):
+    c, _ = client
+    assert c.post("/node/9999/dismiss").status_code == 404
+
+
+def test_dismiss_source_node_400(client):
+    c, _ = client
+    sid = _ingest(c, note="Graphs model relationships.")["source_id"]
+    assert c.post(f"/node/{sid}/dismiss").status_code == 400

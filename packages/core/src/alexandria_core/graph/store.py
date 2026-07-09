@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from importlib import resources
 from pathlib import Path
 
-from .models import Node, Edge, SYMMETRIC_EDGES
+from .models import Node, Edge, KIND_SOURCE, SYMMETRIC_EDGES
 
 try:
     import sqlite_vec
@@ -161,6 +161,38 @@ class GraphStore:
             (blob, k),
         ).fetchall()
         return [(r["node_id"], 1.0 - r["distance"]) for r in rows]  # cosine distance → score
+
+    # ---- dismissed (the "not interested" feedback loop) ----
+    def dismiss_node(self, node_id: int) -> str:
+        """Delete a node and remember it so future ingests suppress the topic.
+        Returns the dismissed name. Raises ValueError for missing or source nodes."""
+        node = self.get_node(node_id)
+        if node is None:
+            raise ValueError(f"node {node_id} not found")
+        if node.kind == KIND_SOURCE:
+            raise ValueError("source nodes cannot be dismissed")
+        vec = self.get_embedding(node_id)
+        blob = struct.pack(f"{len(vec)}f", *vec) if vec is not None else None
+        self.conn.execute(
+            "INSERT INTO dismissed(name, kind, embedding, dismissed_at) VALUES (?,?,?,?)",
+            (node.name, node.kind, blob, _now()),
+        )
+        self.conn.execute("DELETE FROM edges WHERE src_id=? OR dst_id=?", (node_id, node_id))
+        if self.vec_available:
+            self.conn.execute("DELETE FROM vec_nodes WHERE node_id=?", (node_id,))
+        self.conn.execute("DELETE FROM nodes WHERE id=?", (node_id,))
+        self.conn.commit()
+        self.log("dismiss", f"node={node_id} {node.name!r}")
+        return node.name
+
+    def all_dismissed(self) -> list[tuple[str, list[float] | None]]:
+        """(name, embedding) for every dismissed record; embedding may be None."""
+        out: list[tuple[str, list[float] | None]] = []
+        for r in self.conn.execute("SELECT name, embedding FROM dismissed"):
+            blob = r["embedding"]
+            vec = list(struct.unpack(f"{len(blob) // 4}f", blob)) if blob else None
+            out.append((r["name"], vec))
+        return out
 
     # ---- log ----
     def log(self, op: str, detail: str) -> None:

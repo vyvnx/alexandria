@@ -1,4 +1,4 @@
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, EyeOff, X } from "lucide-react";
 
 import { kindColor } from "../model/graph";
 import { isSemantic, type NodeDetail } from "../model/types";
@@ -10,11 +10,13 @@ export function NodeInspector({
   loading,
   onClose,
   onPickNeighbor,
+  onDismiss,
 }: {
   detail: NodeDetail | null;
   loading: boolean;
   onClose: () => void;
   onPickNeighbor: (id: number) => void;
+  onDismiss: (id: number) => void;
 }) {
   const open = loading || !!detail;
   const node = detail?.node;
@@ -123,6 +125,22 @@ export function NodeInspector({
               </ul>
             )}
           </section>
+
+          {node.kind !== "source" && (
+            <section>
+              <button
+                type="button"
+                onClick={() => onDismiss(node.id)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 font-mono text-[0.72rem] tracking-[0.06em] text-vellum-dim transition hover:border-rose hover:text-rose"
+              >
+                <EyeOff className="size-3.5 flex-none" />
+                Not interested
+              </button>
+              <p className="mt-1.5 text-[0.72rem] leading-snug text-vellum-dim">
+                Removes this star and keeps the topic out of future charts.
+              </p>
+            </section>
+          )}
         </div>
       )}
     </aside>

@@ -8,7 +8,7 @@ from ..logging_config import get_logger
 from ..providers.base import LLMProvider, EmbeddingProvider
 from .loaders import load_url
 from .render import screenshot as _screenshot
-from .resolve import resolve
+from .resolve import drop_dismissed, resolve
 from .salience import rank_entities
 
 log = get_logger("ingest")
@@ -94,6 +94,11 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     log.debug("texts to embed: %r", ent_texts + con_texts)
     ent_vecs = embedder.embed(ent_texts, kind="document") if ent_texts else []
     con_vecs = embedder.embed(con_texts, kind="document") if con_texts else []
+
+    # 5b. suppress dismissed topics — user said "not interested", permanently.
+    #     runs before the salience cap so suppressed entities don't eat cap slots.
+    entities, ent_vecs = drop_dismissed(store, entities, ent_vecs, settings)
+    concepts, con_vecs = drop_dismissed(store, concepts, con_vecs, settings)
 
     # 5a. Abstraction cap — keep only the most salient entities for this level.
     #     Concepts are left uncapped; the dial throttles the entity flood.

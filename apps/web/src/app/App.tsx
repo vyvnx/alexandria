@@ -166,6 +166,23 @@ export function App() {
     engineRef.current?.select(null);
   }
 
+  async function handleDismiss(id: number) {
+    try {
+      const { dismissed } = await api.dismissNode(id);
+      closeDossier();
+      setToast({
+        msg: `“${dismissed}” dismissed — it won't be charted again.`,
+        error: false,
+      });
+      await loadGraph();
+    } catch (err) {
+      setToast({
+        msg: err instanceof Error ? err.message : "Couldn't dismiss the star.",
+        error: true,
+      });
+    }
+  }
+
   const isEmpty = !!graphData && counts?.nodes === 0;
 
   return (
@@ -213,6 +230,7 @@ export function App() {
         loading={detailLoading}
         onClose={closeDossier}
         onPickNeighbor={focusAndSelect}
+        onDismiss={handleDismiss}
       />
 
       {!webgl2 && (

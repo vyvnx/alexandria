@@ -72,3 +72,42 @@ def test_log(store):
     store.log("ingest", "added 3 nodes")
     rows = store.conn.execute("SELECT op, detail FROM log").fetchall()
     assert rows[0][0] == "ingest"
+
+
+def test_dismiss_node_removes_and_records(store):
+    src = store.add_node(KIND_SOURCE, "An Article")
+    nid = store.add_node(KIND_CONCEPT, "Patreon", {"description": "membership platform"})
+    store.add_embedding(nid, [0.1] * 1024)
+    store.add_edge(src, nid, "about")
+
+    name = store.dismiss_node(nid)
+
+    assert name == "Patreon"
+    assert store.get_node(nid) is None
+    assert store.edges_for(nid) == []
+    assert store.get_embedding(nid) is None
+    dismissed = store.all_dismissed()
+    assert len(dismissed) == 1
+    dname, dvec = dismissed[0]
+    assert dname == "Patreon"
+    if store.vec_available:
+        assert dvec is not None and len(dvec) == 1024
+        assert abs(dvec[0] - 0.1) < 1e-6
+    else:
+        assert dvec is None
+
+
+def test_dismiss_source_node_rejected(store):
+    sid = store.add_node(KIND_SOURCE, "An Article")
+    with pytest.raises(ValueError):
+        store.dismiss_node(sid)
+    assert store.get_node(sid) is not None
+
+
+def test_dismiss_unknown_node_rejected(store):
+    with pytest.raises(ValueError):
+        store.dismiss_node(999)
+
+
+def test_all_dismissed_empty_by_default(store):
+    assert store.all_dismissed() == []

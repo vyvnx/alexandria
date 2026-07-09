@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from alexandria_core.config import get_settings, Settings
+from alexandria_core.graph.models import KIND_SOURCE
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.ingest.pipeline import ingest
 from alexandria_core.logging_config import configure_logging, get_logger
@@ -147,6 +148,17 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
                                            "evidence": e.evidence}})
         return {"node": _node_dict(n), "source": store.get_source(node_id),
                 "neighbors": neighbors}
+
+    @app.post("/node/{node_id}/dismiss")
+    def dismiss_node(node_id: int):
+        n = store.get_node(node_id)
+        if not n:
+            raise HTTPException(404, "node not found")
+        if n.kind == KIND_SOURCE:
+            raise HTTPException(400, "source nodes cannot be dismissed")
+        name = store.dismiss_node(node_id)
+        log.info("dismissed node %d %r — topic suppressed in future ingests", node_id, name)
+        return {"dismissed": name}
 
     # serve the built SPA if present (apps/web/dist) — mounted last so API routes win.
     # The frontend is built later; until then this mount is simply skipped.

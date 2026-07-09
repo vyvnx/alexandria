@@ -87,3 +87,12 @@ def test_same_topic_defaults_false_on_bad_json(monkeypatch):
     p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
     monkeypatch.setattr(p, "_chat_json", lambda system, user: {"unexpected": 1})
     assert p.same_topic("A", "B").same_topic is False
+
+
+def test_extract_sys_frames_knowledge_map_at_every_level():
+    for level in ("abstract", "balanced", "exhaustive"):
+        s = extract_sys(level)
+        assert "personal knowledge map" in s
+        assert "NEVER extract" in s
+        # json contract still present
+        assert '"concepts"' in s
