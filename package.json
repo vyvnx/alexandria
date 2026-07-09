@@ -5,6 +5,7 @@
   "description": "Alexandria monorepo — Python (uv workspace) + JS (pnpm workspaces), orchestrated by Turborepo",
   "packageManager": "pnpm@10.9.0",
   "scripts": {
+    "postinstall": "uv sync --extra visual --extra ml",
     "test": "turbo run test",
     "build": "turbo run build",
     "lint": "turbo run lint",
