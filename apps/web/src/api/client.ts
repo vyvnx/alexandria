@@ -61,6 +61,11 @@ export const api = {
 
   node: (id: number) => request<NodeDetail>(`/node/${id}`),
 
+  /** Dismiss a node as "not interested": deletes it and suppresses the topic
+      in future ingests. */
+  dismissNode: (id: number) =>
+    request<{ dismissed: string }>(`/node/${id}/dismiss`, { method: "POST" }),
+
   search: (q: string) => request<SearchHit[]>(`/search?q=${encodeURIComponent(q)}`),
 
   /** Kick off an ingest; returns a job id to poll with `ingestStatus`. */
