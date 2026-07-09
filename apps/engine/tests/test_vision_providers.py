@@ -1,7 +1,7 @@
 import base64
 
-from alexandria_engine.openai_provider import OpenAIProvider
-from alexandria_engine.ollama_provider import OllamaProvider
+from engine.openai_provider import OpenAIProvider
+from engine.ollama_provider import OllamaProvider
 
 
 class _FakeResp:

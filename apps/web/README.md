@@ -40,12 +40,12 @@ src/
 ## Develop
 
 ```bash
-# from the repo root (npm workspaces + turbo)
-npm install
-npm run dev --workspace @alexandria/web      # vite on :5173, proxies API → :8000
+# from the repo root (pnpm workspaces + turbo)
+pnpm install
+pnpm --filter @alexandria/web dev            # vite on :5173, proxies API → :8000
 
 # run the FastAPI backend in another shell so the proxy has a target
-ALEX_LLM=fake uv run python -m alexandria_api
+ALEX_LLM=fake uv run python -m api
 ```
 
 Set `ALEX_API_URL` to point the dev proxy at a different backend.
@@ -53,7 +53,7 @@ Set `ALEX_API_URL` to point the dev proxy at a different backend.
 ## Build & serve
 
 ```bash
-npm run build --workspace @alexandria/web    # → apps/web/dist
+pnpm --filter @alexandria/web build          # → apps/web/dist
 ```
 
 `apps/api` auto-mounts `apps/web/dist` at `/`, so the production backend serves
@@ -62,6 +62,6 @@ the SPA directly — no separate web server.
 ## Test / typecheck
 
 ```bash
-npm run test --workspace @alexandria/web     # vitest — model adapter + filters
-npm run lint --workspace @alexandria/web     # tsc --noEmit
+pnpm --filter @alexandria/web test           # vitest — model adapter + filters
+pnpm --filter @alexandria/web lint           # tsc --noEmit
 ```

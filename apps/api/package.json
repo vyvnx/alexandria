@@ -6,6 +6,6 @@
   "scripts": {
     "build": "uv build --package alexandria-api --out-dir dist",
     "test": "uv run pytest tests",
-    "dev": "uv run python -m alexandria_api"
+    "dev": "uv run python -m api"
   }
 }

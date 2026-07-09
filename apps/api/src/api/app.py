@@ -10,7 +10,7 @@ from alexandria_core.config import get_settings, Settings
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.ingest.pipeline import ingest
 from alexandria_core.logging_config import configure_logging, get_logger
-from alexandria_engine import factory
+from engine import factory
 
 log = get_logger("api")
 

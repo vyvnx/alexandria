@@ -26,4 +26,4 @@ COPY --from=builder /app /app
 # Cache the embedding model inside the image's HOME on first run / pre-download in CI.
 ENV PATH="/app/.venv/bin:$PATH" HF_HOME=/data/hf
 EXPOSE 8100
-CMD ["python", "-m", "alexandria_engine"]
+CMD ["python", "-m", "engine"]

@@ -173,19 +173,6 @@ export function App() {
       <div className="atlas-grid pointer-events-none absolute inset-0 z-0" />
       <div ref={containerRef} className="absolute inset-0 z-0" />
 
-      <header className="masthead-bg pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center gap-3 px-[1.1rem] py-[0.85rem]">
-        <div className="pointer-events-auto flex items-center gap-2 select-none">
-          <span className="font-display text-[clamp(1.6rem,1.1rem+1.6vw,2.4rem)] font-medium tracking-[0.18em] text-vellum">
-            Alexandria
-          </span>
-          <span>•</span>
-          <span className="hidden font-mono text- tracking-[0.04em] text-vellum-dim md:inline">
-            a celestial index of what you've read
-          </span>
-        </div>
-        <span className="flex-1" />
-      </header>
-
       {isEmpty && (
         <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center text-center">
           <div className="max-w-[30ch]">

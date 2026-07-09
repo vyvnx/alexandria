@@ -8,7 +8,7 @@ stored in a graph, and you explore the whole thing as a map.
 
 ## tech
 
-monorepo: turborepo, uv workspace (python), npm workspaces (js)
+monorepo: turborepo, uv workspace (python), pnpm workspaces (js)
 
 - core (python): pydantic, sqlite + sqlite-vec, trafilatura, rapidfuzz
 - api (python): fastapi, uvicorn
@@ -17,31 +17,31 @@ monorepo: turborepo, uv workspace (python), npm workspaces (js)
 
 ## run
 
-needs `uv` and `node`.
+needs `uv` and `node` + `pnpm`.
 
 ```sh
 uv sync            # python deps
-npm install        # js deps
+pnpm install       # js deps
 cp .env.example .env   # then set ALEX_OPENAI_API_KEY
 ```
 
 everything at once:
 
 ```sh
-npm run dev        # turbo runs every app
+pnpm dev           # turbo runs every app
 ```
 
 or one at a time:
 
 ```sh
-cd apps/api && uv run python -m alexandria_api   # http://localhost:8000
-cd apps/web && npm run dev                       # vite dev server
+cd apps/api && uv run python -m api   # http://localhost:8000
+cd apps/web && pnpm dev                          # vite dev server
 ```
 
 tests:
 
 ```sh
-npm test           # or: uv run pytest
+pnpm test          # or: uv run pytest
 ```
 
 ## deploy
