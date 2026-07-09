@@ -1,6 +1,6 @@
 import json
 
-from alexandria_engine.openai_provider import OpenAIProvider, extract_sys
+from engine.openai_provider import OpenAIProvider, extract_sys
 from alexandria_core.providers.base import Extraction, TopicMatch
 
 

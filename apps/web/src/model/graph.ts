@@ -18,9 +18,6 @@ import {
 export type SizeConfig = Pick<VizConfig, "star_size_min" | "star_size_max">;
 const DEFAULT_SIZE: SizeConfig = { star_size_min: 4, star_size_max: 11 };
 
-/* Celestial convention (design spec §10):
-   nodes = glowing stars (colour by kind), edges = brass constellation lines,
-   similar-to = rose (predicted/semantic). These read the locked palette. */
 const KIND_COLOR: Record<NodeKind, string> = {
   source: "#e8c879", // brass-bright — the things you bring in; the brightest stars
   entity: "#7fe3d6", // starlight — people / orgs / tools
@@ -30,8 +27,10 @@ const KIND_COLOR: Record<NodeKind, string> = {
 const BRASS = "#cba34c";
 const ROSE = "#e0897c";
 
-export const kindColor = (kind: NodeKind): string => KIND_COLOR[kind] ?? "#ece4d2";
-export const edgeColor = (type: EdgeType): string => (isSemantic(type) ? ROSE : BRASS);
+export const kindColor = (kind: NodeKind): string =>
+  KIND_COLOR[kind] ?? "#ece4d2";
+export const edgeColor = (type: EdgeType): string =>
+  isSemantic(type) ? ROSE : BRASS;
 
 /** Edge key is deterministic so highlight()/picking can reference edges by id. */
 export const edgeKey = (src: number, dst: number, type: string): EdgeId_ =>
@@ -52,7 +51,10 @@ export interface BuildResult {
 }
 
 /** Adapt the API payload into a graphology graph ready for the engine. */
-export function buildGraph(data: GraphResponse, cfg: SizeConfig = DEFAULT_SIZE): Graph {
+export function buildGraph(
+  data: GraphResponse,
+  cfg: SizeConfig = DEFAULT_SIZE,
+): Graph {
   const graph = new Graph({ multi: true, type: "undirected" });
   const total = data.nodes.length;
 
@@ -97,7 +99,10 @@ export function buildGraph(data: GraphResponse, cfg: SizeConfig = DEFAULT_SIZE):
    Sources are excluded from weighting and pinned to the floor — luminance is
    carried by their colour, not size (plan §4). A stand-in until PageRank lands
    in the WASM core. */
-export function sizeByWeight(graph: Graph, cfg: SizeConfig = DEFAULT_SIZE): void {
+export function sizeByWeight(
+  graph: Graph,
+  cfg: SizeConfig = DEFAULT_SIZE,
+): void {
   const { star_size_min: min, star_size_max: max } = cfg;
 
   graph.forEachNode((node) => graph.setNodeAttribute(node, "weight", 0));

@@ -23,15 +23,20 @@ jobs:
         with:
           enable-cache: true
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.9.0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: pnpm
 
       - name: Install Python workspace
         run: uv sync --all-packages
 
       - name: Install JS workspace (turbo)
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       # Affected-only: turbo diffs against the base branch and runs tasks ONLY for
       # packages whose inputs changed (plus their dependents) — the big-repo pattern
@@ -39,7 +44,7 @@ jobs:
       - name: Lint + test (affected)
         env:
           TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.base_ref || 'HEAD^1' }}
-        run: npx turbo run lint test --affected
+        run: pnpm exec turbo run lint test --affected
 
   # Build + push one container image per deployable app. Gate each on path changes so
   # only the apps that actually changed get rebuilt/redeployed.

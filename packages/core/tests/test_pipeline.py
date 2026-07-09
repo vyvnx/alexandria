@@ -106,3 +106,47 @@ def test_ingest_note_only(built):
                  fetch=lambda u: None)
     assert res.source_id > 0
     assert res.summary != ""
+
+
+def test_visual_merges_content_and_adds_nodes():
+    from alexandria_core.providers.fake import FakeLLM, FakeVision
+    store = GraphStore(":memory:")
+    store.init_schema()
+    settings = Settings(_env_file=None, llm="fake")
+    ingest(store, FakeLLM(), FakeEmbedder(), settings,
+           url="http://x", note=None, fetch=lambda u: None,
+           visual=True, vision=FakeVision(text="Photosynthesis converts light."),
+           render_fn=lambda u, settings=None: [b"png"])
+    names = {n.name for n in store.all_nodes()}
+    assert "Photosynthesis" in names  # capitalized token pulled from the visual text
+    store.close()
+
+
+def test_visual_off_skips_vision():
+    from alexandria_core.providers.fake import FakeLLM, FakeVision
+    store = GraphStore(":memory:")
+    store.init_schema()
+    settings = Settings(_env_file=None, llm="fake")
+    ingest(store, FakeLLM(), FakeEmbedder(), settings,
+           url="http://x", note=None, fetch=lambda u: None,
+           visual=False, vision=FakeVision(text="Photosynthesis converts light."),
+           render_fn=lambda u, settings=None: [b"png"])
+    names = {n.name for n in store.all_nodes()}
+    assert "Photosynthesis" not in names
+    store.close()
+
+
+def test_visual_degrades_when_render_raises():
+    from alexandria_core.providers.fake import FakeLLM, FakeVision
+    store = GraphStore(":memory:")
+    store.init_schema()
+    settings = Settings(_env_file=None, llm="fake")
+
+    def boom(u, settings=None):
+        raise RuntimeError("render down")
+
+    res = ingest(store, FakeLLM(), FakeEmbedder(), settings,
+                 url="http://x", note="A note about Newton.", fetch=lambda u: None,
+                 visual=True, vision=FakeVision(), render_fn=boom)
+    assert res.source_id > 0  # ingest still succeeded despite the render failure
+    store.close()

@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "llama3.1"
 
+    # visual enrichment (opt-in): screenshot + VLM read of the tables/charts/
+    # figures trafilatura drops. see docs/superpowers/specs/2026-07-02-pixelrag-*.
+    openai_vision_model: str = "gpt-4o-mini"
+    ollama_vision_model: str = "llava"
+    screenshot_viewport_width: int = 1280
+    screenshot_timeout_ms: int = 15000
+    screenshot_max_segments: int = 4      # cap tall-page slices -> bounds VLM cost
+
     db_path: str = "../data/alexandria.db"
     embed_model: str = "Qwen/Qwen3-Embedding-0.6B"
     embed_dim: int = 1024

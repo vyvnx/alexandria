@@ -59,3 +59,11 @@ class OllamaProvider:
         except (ValidationError, json.JSONDecodeError, KeyError):
             return TopicMatch(same_topic=False, reason="parse-error")
         return TopicMatch(m.same_topic, m.canonical_topic, m.reason)
+
+    def describe_image(self, images: list[bytes], prompt: str) -> str:
+        resp = self.client.chat(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt, "images": list(images)}],
+            options={"temperature": 0},
+        )
+        return resp["message"]["content"].strip()

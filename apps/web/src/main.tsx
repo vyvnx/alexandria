@@ -9,6 +9,6 @@ import "./index.css";
 // (init/dispose) is correct either way.
 const root = document.getElementById("root");
 if (root) {
-  document.title = "Alexandria · Celestial Atlas";
+  document.title = "Alexandria";
   createRoot(root).render(<App />);
 }

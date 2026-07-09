@@ -23,3 +23,9 @@ def test_fake_embedder_dim_and_determinism():
     v2 = emb.embed(["hello"], kind="document")[0]
     assert len(v1) == 1024 and v1 == v2
     assert emb.embed(["other"], kind="document")[0] != v1
+
+
+def test_fake_vision_returns_canned_text():
+    from alexandria_core.providers.fake import FakeVision
+    v = FakeVision(text="Region | Sales\nNorth | 10")
+    assert v.describe_image([b"png-bytes"], "read the page") == "Region | Sales\nNorth | 10"

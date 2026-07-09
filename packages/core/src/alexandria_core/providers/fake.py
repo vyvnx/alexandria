@@ -62,3 +62,17 @@ class FakeEmbedder:
             norm = math.sqrt(sum(x * x for x in raw)) or 1.0
             out.append([x / norm for x in raw])
         return out
+
+
+class FakeVision:
+    """Deterministic stand-in: returns canned text regardless of the image bytes.
+
+    Mirrors FakeLLM/FakeEmbedder so pipeline tests can drive the visual path
+    without a browser or a real vision model.
+    """
+
+    def __init__(self, text: str = "Photosynthesis converts light into energy."):
+        self._text = text
+
+    def describe_image(self, images: list[bytes], prompt: str) -> str:
+        return self._text

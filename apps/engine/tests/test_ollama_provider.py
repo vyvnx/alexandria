@@ -1,4 +1,4 @@
-from alexandria_engine.ollama_provider import OllamaProvider
+from engine.ollama_provider import OllamaProvider
 from alexandria_core.providers.base import Extraction, TopicMatch
 
 

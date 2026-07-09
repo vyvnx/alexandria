@@ -1,6 +1,6 @@
 import pytest
 
-from alexandria_engine.qwen_embedder import Qwen3Embedder, format_for_kind
+from engine.qwen_embedder import Qwen3Embedder, format_for_kind
 
 
 def test_query_gets_instruction_wrapper():
