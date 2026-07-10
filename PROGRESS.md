@@ -41,7 +41,7 @@ Deferred from H1: F5 (no bulk op to gate), A2b PDF/OCR loader (own plan later), 
 
 ## H2 tasks
 
-- [ ] Task 1 — D1: algo core (pagerank, louvain, betweenness, link prediction)
+- [x] Task 1 — D1: algo core — `alexandria_core/algo.py`: weighted pagerank, deterministic louvain (local-move + aggregation), brandes betweenness (pivot-sampled past 200 nodes), common-neighbor link prediction; 8 exact-structure tests
 - [ ] Task 2 — D2: structural insights + `GET /insights`
 - [ ] Task 3 — D5: pagerank-derived topics close the intake loop
 - [ ] Task 4 — D3: `answer()` provider seam
