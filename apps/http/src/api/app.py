@@ -110,7 +110,9 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             nodes = store.all_nodes()
             edges = store.all_edges()
         return {
-            "nodes": [_node_dict(n) for n in nodes],
+            # trimmed wire shape (roadmap B1): no data blob — the dossier
+            # lazy-loads it via /node/{id}
+            "nodes": [{"id": n.id, "kind": n.kind, "name": n.name} for n in nodes],
             "edges": [{"src": e.src_id, "dst": e.dst_id, "type": e.type, "weight": e.weight}
                       for e in edges],
         }

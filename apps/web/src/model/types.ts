@@ -32,7 +32,8 @@ export interface WireNode {
   id: number;
   kind: NodeKind;
   name: string;
-  data: Record<string, unknown>;
+  /** only on `/node/{id}` — `/graph` ships the trimmed shape (roadmap B1) */
+  data?: Record<string, unknown>;
 }
 
 export interface WireEdge {

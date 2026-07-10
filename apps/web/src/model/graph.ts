@@ -67,7 +67,6 @@ export function buildGraph(
       x: pos.x,
       y: pos.y,
       size: 4, // refined by revisit-weight below
-      data: n.data,
     });
   });
 

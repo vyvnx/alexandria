@@ -13,7 +13,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 ## H0 tasks
 
 - [x] Task 0 — baseline: fixed 2 indentation errors in `pipeline.py`, full suite green (121 py + 34 web), committed pre-existing provider consolidation
-- [ ] Task 1 — B1: trim `/graph` payload
+- [x] Task 1 — B1: trim `/graph` payload (nodes now `{id, kind, name}`; `WireNode.data` optional; 17 http + 34 web tests green)
 - [ ] Task 2 — F1: telemetry store + metered proxies (core)
 - [ ] Task 3 — F1: surface usage from OpenAI provider
 - [ ] Task 4 — F1: wire telemetry into API + `GET /executions`

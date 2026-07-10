@@ -77,6 +77,20 @@ def test_ingest_note_then_graph_and_search(client):
     assert isinstance(s, list)
 
 
+def test_graph_nodes_are_trimmed(client):
+    # B1: /graph ships no data blob — the inspector lazy-loads it via /node/{id}
+    c, _ = client
+    _ingest(c, note="Attention mechanisms power transformers.")
+    nodes = c.get("/graph").json()["nodes"]
+    assert nodes and all(set(n) == {"id", "kind", "name"} for n in nodes)
+
+
+def test_node_detail_keeps_data(client):
+    c, _ = client
+    sid = _ingest(c, note="Graphs model relationships.")["source_id"]
+    assert "data" in c.get(f"/node/{sid}").json()["node"]
+
+
 def test_node_detail(client):
     c, _ = client
     sid = _ingest(c, note="Graphs model relationships.")["source_id"]
