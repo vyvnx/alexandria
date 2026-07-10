@@ -1,3 +1,4 @@
+import sqlite3
 import threading
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -12,6 +13,7 @@ from alexandria_core.config import get_settings, Settings
 from alexandria_core.graph.models import KIND_SOURCE
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.ingest.pipeline import ingest
+from alexandria_core.intake import IntakeRegistry
 from alexandria_core.logging_config import configure_logging, get_logger
 from alexandria_core.telemetry import (
     MeteredEmbedder, MeteredLLM, MeteredVision, TelemetryStore, set_current_execution,
@@ -19,6 +21,16 @@ from alexandria_core.telemetry import (
 from engine import factory
 
 log = get_logger("api")
+
+
+class FeedBody(BaseModel):
+    url: str
+    cadence_minutes: int = 60
+
+
+class TopicBody(BaseModel):
+    name: str
+    weight: float = 1.0
 
 
 class IngestBody(BaseModel):
@@ -31,12 +43,14 @@ class IngestBody(BaseModel):
 
 
 def create_app(store=None, llm=None, embedder=None, settings: Settings | None = None,
-               vision=None) -> FastAPI:
+               vision=None, registry=None) -> FastAPI:
     configure_logging()
     settings = settings or get_settings()
     if store is None:
         store = GraphStore(settings.db_path)
         store.init_schema()
+    # curated feed/topic registry (A3) — domain data, lives in the graph db file
+    registry = registry or IntakeRegistry(settings.db_path)
     # every provider (injected fakes included) is metered through the telemetry
     # seam (F1): per-call task/tokens/cost/duration, grouped by ingest execution
     telemetry = TelemetryStore(settings.executions_db_path,
@@ -98,6 +112,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         store, llm, embedder, settings)
     app.state.vision = vision
     app.state.telemetry = telemetry
+    app.state.registry = registry
 
     def _node_dict(n):
         return {"id": n.id, "kind": n.kind, "name": n.name, "data": n.data}
@@ -144,6 +159,52 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     def executions(limit: int = 50):
         # cost/status ledger for the /executions panel (F1)
         return telemetry.list_executions(limit)
+
+    @app.get("/feeds")
+    def list_feeds():
+        return registry.list_feeds()
+
+    @app.post("/feeds")
+    def add_feed(body: FeedBody):
+        try:
+            fid = registry.add_feed(body.url, cadence_minutes=body.cadence_minutes)
+        except sqlite3.IntegrityError:
+            raise HTTPException(409, "feed already registered")
+        return {"id": fid}
+
+    @app.delete("/feeds/{feed_id}")
+    def remove_feed(feed_id: int):
+        if not registry.feed_exists(feed_id):
+            raise HTTPException(404, "unknown feed")
+        registry.remove_feed(feed_id)
+        return {"removed": feed_id}
+
+    @app.post("/feeds/{feed_id}/poll")
+    def poll_feed(feed_id: int):
+        if not registry.feed_exists(feed_id):
+            raise HTTPException(404, "unknown feed")
+        registry.poll_now(feed_id)
+        wake.set()
+        return {"polling": feed_id}
+
+    @app.get("/topics")
+    def list_topics():
+        return registry.list_topics()
+
+    @app.post("/topics")
+    def add_topic(body: TopicBody):
+        try:
+            tid = registry.add_topic(body.name, weight=body.weight)
+        except sqlite3.IntegrityError:
+            raise HTTPException(409, "topic already exists")
+        return {"id": tid}
+
+    @app.delete("/topics/{topic_id}")
+    def remove_topic(topic_id: int):
+        if not registry.topic_exists(topic_id):
+            raise HTTPException(404, "unknown topic")
+        registry.remove_topic(topic_id)
+        return {"removed": topic_id}
 
     @app.get("/graph")
     def graph(node_id: int | None = None, k: int = 2):

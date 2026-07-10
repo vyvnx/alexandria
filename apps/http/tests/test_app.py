@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from api.app import create_app
 from alexandria_core.graph.store import GraphStore
+from alexandria_core.intake import IntakeRegistry
 from alexandria_core.providers.fake import FakeLLM, FakeEmbedder
 from alexandria_core.config import Settings
 from alexandria_core.graph.models import KIND_CONCEPT
@@ -15,6 +16,7 @@ def client():
     store = GraphStore(":memory:")
     store.init_schema()
     app = create_app(store=store, llm=FakeLLM(), embedder=FakeEmbedder(),
+                     registry=IntakeRegistry(":memory:"),
                      settings=Settings(_env_file=None, llm="fake",
                                        executions_db_path=":memory:"))
     # context manager so the lifespan runs — it starts the ingest worker thread
@@ -252,6 +254,36 @@ def test_jobs_survive_in_one_persistent_store(client):
     job_id = c.post("/ingest", json={"note": "One row, two views."}).json()["job_id"]
     _wait(c, job_id)
     assert any(str(r["id"]) == job_id for r in c.get("/executions").json())
+
+
+def test_feeds_crud(client):
+    c, _ = client
+    r = c.post("/feeds", json={"url": "https://blog.example/rss", "cadence_minutes": 30})
+    assert r.status_code == 200
+    fid = r.json()["id"]
+    (feed,) = c.get("/feeds").json()
+    assert feed["url"] == "https://blog.example/rss"
+    assert feed["cadence_minutes"] == 30
+    assert feed["items"] == {"enqueued": 0, "filtered": 0, "error": 0}
+    assert c.post("/feeds", json={"url": "https://blog.example/rss"}).status_code == 409
+    assert c.post(f"/feeds/{fid}/poll").status_code == 200
+    assert c.post("/feeds/999/poll").status_code == 404
+    assert c.delete(f"/feeds/{fid}").status_code == 200
+    assert c.get("/feeds").json() == []
+    assert c.delete("/feeds/999").status_code == 404
+
+
+def test_topics_crud(client):
+    c, _ = client
+    r = c.post("/topics", json={"name": "cloud architecture", "weight": 2.0})
+    assert r.status_code == 200
+    tid = r.json()["id"]
+    (topic,) = c.get("/topics").json()
+    assert topic["name"] == "cloud architecture" and topic["weight"] == 2.0
+    assert c.post("/topics", json={"name": "cloud architecture"}).status_code == 409
+    assert c.delete(f"/topics/{tid}").status_code == 200
+    assert c.get("/topics").json() == []
+    assert c.delete("/topics/999").status_code == 404
 
 
 def test_dismiss_node(client):

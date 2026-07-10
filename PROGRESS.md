@@ -23,7 +23,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 ## H1 tasks
 
 - [x] Task 1 — A5: dedup before the LLM — url gate before fetch (unless a new note arrives), sha256 content gate before summarize; `IngestResult.deduped`; lazy `content_hash` column migration
-- [ ] Task 2 — A3: intake registry (feeds + topics) + HTTP CRUD
+- [x] Task 2 — A3: intake registry (feeds + topics) + HTTP CRUD — `alexandria_core/intake.py` (`IntakeRegistry`: feed/topic/feed_item tables in the graph db), `/feeds` + `/topics` endpoints with 404/409
 - [ ] Task 3 — A3: feed poller in the worker loop
 - [ ] Task 4 — A3b: topic-relevance gate
 - [ ] Task 5 — F2: usage rollups (`GET /usage` + panel strip)
