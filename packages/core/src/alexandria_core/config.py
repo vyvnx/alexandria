@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     screenshot_max_segments: int = 4      # cap tall-page slices -> bounds VLM cost
 
     db_path: str = "../data/alexandria.db"
+
+    # Cost telemetry (roadmap F1): executions + per-call ledger, its own SQLite
+    # file next to the graph db. Prices are $ per 1M tokens for the configured
+    # model; 0 (unset) ⇒ cost reported as tokens only.
+    executions_db_path: str = "../data/executions.db"
+    price_in_per_mtok: float = 0.0
+    price_out_per_mtok: float = 0.0
     embed_model: str = "Qwen/Qwen3-Embedding-0.6B"
     embed_dim: int = 1024
     similar_top_k: int = 5
@@ -68,7 +75,7 @@ class Settings(BaseSettings):
     min_galaxy_size: int = 3              # communities below this draw no hull (lone stars)
 
 
-    @field_validator("db_path")
+    @field_validator("db_path", "executions_db_path")
     @classmethod
     def _anchor_db_path(cls, v: str) -> str:
         # A relative db_path would otherwise be resolved by sqlite against the
