@@ -35,6 +35,10 @@ class Settings(BaseSettings):
 
     db_path: str = "../data/alexandria.db"
 
+    # Intake (roadmap A3): feed polling backpressure — max items one poll pass
+    # may enqueue per feed; the rest wait for the next cadence.
+    feed_batch_max: int = 10
+
     # Cost telemetry (roadmap F1): executions + per-call ledger, its own SQLite
     # file next to the graph db. Prices are $ per 1M tokens for the configured
     # model; 0 (unset) ⇒ cost reported as tokens only.

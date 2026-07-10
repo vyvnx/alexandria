@@ -273,6 +273,35 @@ def test_feeds_crud(client):
     assert c.delete("/feeds/999").status_code == 404
 
 
+def test_feed_poll_flows_through_the_queue(client, monkeypatch):
+    c, store = client
+    monkeypatch.setattr("alexandria_core.intake.discover_items",
+                        lambda u: ["https://blog.example/post-1"])
+    html = "<html><body><article><p>Attention mechanisms power transformers "
+    html += "in modern language models today.</p></article></body></html>"
+    # the poller loads the item once, the pipeline loads it again on ingest
+    from alexandria_core.ingest import loaders, pipeline
+    monkeypatch.setattr(loaders, "load_url",
+                        lambda url, fetch=None: loaders.LoadedDoc(
+                            url=url, title="Post 1", author=None,
+                            published_at=None, text="Attention powers transformers."))
+    monkeypatch.setattr(pipeline, "load_url", loaders.load_url)
+    c.post("/feeds", json={"url": "https://blog.example/rss"})
+
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        rows = c.get("/executions").json()
+        if rows and rows[0]["status"] == "succeeded":
+            break
+        time.sleep(0.05)
+    (row,) = c.get("/executions").json()
+    assert row["source"] == "https://blog.example/post-1"
+    assert row["status"] == "succeeded"
+    assert store.find_source_by_url("https://blog.example/post-1") is not None
+    (feed,) = c.get("/feeds").json()
+    assert feed["items"]["enqueued"] == 1
+
+
 def test_topics_crud(client):
     c, _ = client
     r = c.post("/topics", json={"name": "cloud architecture", "weight": 2.0})

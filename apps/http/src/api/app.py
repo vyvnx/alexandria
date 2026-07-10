@@ -13,7 +13,7 @@ from alexandria_core.config import get_settings, Settings
 from alexandria_core.graph.models import KIND_SOURCE
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.ingest.pipeline import ingest
-from alexandria_core.intake import IntakeRegistry
+from alexandria_core.intake import IntakeRegistry, poll_feeds
 from alexandria_core.logging_config import configure_logging, get_logger
 from alexandria_core.telemetry import (
     MeteredEmbedder, MeteredLLM, MeteredVision, TelemetryStore, set_current_execution,
@@ -91,11 +91,16 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     def _worker():
         while not stop.is_set():
             row = telemetry.claim_next()
-            if row is None:
-                wake.wait(timeout=0.5)
-                wake.clear()
+            if row is not None:
+                _run_job(row)
                 continue
-            _run_job(row)
+            # idle: poll due feeds (A3) — discovered items enter the same queue
+            try:
+                poll_feeds(registry, store, embedder, telemetry, settings)
+            except Exception:
+                log.exception("feed polling failed")
+            wake.wait(timeout=0.5)
+            wake.clear()
 
     @asynccontextmanager
     async def lifespan(_app):

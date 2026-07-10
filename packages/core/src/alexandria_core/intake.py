@@ -151,3 +151,51 @@ class IntakeRegistry:
 
     def close(self) -> None:
         self.conn.close()
+
+
+def discover_items(feed_url: str) -> list[str]:
+    """Article links for a feed url. The network seam — monkeypatched in tests."""
+    from trafilatura import feeds
+    return feeds.find_feed_urls(feed_url)
+
+
+def poll_feeds(registry: IntakeRegistry, store, embedder, telemetry, settings, *,
+               now: str | None = None, discover=None, load=None) -> int:
+    """One poll pass over the due feeds: discover items, drop what's seen or
+    already ingested, and enqueue the rest through the A1 job queue. Returns
+    how many items were enqueued. A broken feed logs and waits its cadence —
+    it never kills the pass."""
+    from .ingest.loaders import load_url
+    discover = discover or discover_items
+    load = load or load_url
+
+    enqueued = 0
+    for feed in registry.due_feeds(now):
+        try:
+            links = discover(feed["url"])
+        except Exception:
+            log.warning("feed discovery failed for %s — retrying next cadence",
+                        feed["url"])
+            registry.mark_polled(feed["id"], now=now)
+            continue
+        fresh = [u for u in links
+                 if not registry.item_seen(feed["id"], u)
+                 and store.find_source_by_url(u) is None]
+        # ponytail: cap per poll pass = backpressure; a burst waits for the
+        # next cadence instead of flooding the queue
+        fresh = fresh[:settings.feed_batch_max]
+        if fresh:
+            log.info("feed %s: %d new item(s)", feed["url"], len(fresh))
+        for link in fresh:
+            try:
+                doc = load(link)
+            except Exception:
+                doc = None
+            if doc is None or not doc.text:
+                registry.record_item(feed["id"], link, "error")
+                continue
+            telemetry.enqueue(link, {"url": link})
+            registry.record_item(feed["id"], link, "enqueued")
+            enqueued += 1
+        registry.mark_polled(feed["id"], now=now)
+    return enqueued
