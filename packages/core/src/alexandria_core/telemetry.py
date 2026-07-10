@@ -305,6 +305,10 @@ class MeteredLLM:
         return _metered(self._store, self.inner, "same_topic",
                         lambda: self.inner.same_topic(label_a, label_b))
 
+    def answer(self, question: str, context: str) -> str:
+        return _metered(self._store, self.inner, "answer",
+                        lambda: self.inner.answer(question, context))
+
 
 class MeteredEmbedder:
     """EmbeddingProvider proxy — local model, so duration only (no usage)."""

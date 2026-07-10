@@ -50,6 +50,10 @@ class FakeLLM:
                           canonical_topic=label_b if decided else None,
                           reason="scripted")
 
+    def answer(self, question: str, context: str) -> str:
+        head = context.strip().splitlines()[0] if context.strip() else "(no context)"
+        return f"Fake answer to {question!r} based on [1]: {head[:80]}"
+
 
 class FakeEmbedder:
     def __init__(self, dim: int = 1024):

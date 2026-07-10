@@ -44,7 +44,7 @@ Deferred from H1: F5 (no bulk op to gate), A2b PDF/OCR loader (own plan later), 
 - [x] Task 1 — D1: algo core — `alexandria_core/algo.py`: weighted pagerank, deterministic louvain (local-move + aggregation), brandes betweenness (pivot-sampled past 200 nodes), common-neighbor link prediction; 8 exact-structure tests
 - [x] Task 2 — D2: structural insights — `insights.py` (interests/communities/bridges/suggestions/trending/contradictions) + `GET /insights`
 - [x] Task 3 — D5: pagerank-derived topics — `topic_names` learned half = recurring interests ∪ top-pagerank concepts, capped
-- [ ] Task 4 — D3: `answer()` provider seam
+- [x] Task 4 — D3: `answer()` provider seam — protocol + fake + openai (cited, context-only prompt) + metered + routed
 - [ ] Task 5 — D3: GraphRAG retrieval + `GET /ask`
 - [ ] Task 6 — D4: digest + `GET /digest`
 - [ ] Task 7 — web: `#/insights` page

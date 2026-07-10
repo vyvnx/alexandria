@@ -42,3 +42,6 @@ class RoutedLLM:
 
     def same_topic(self, label_a: str, label_b: str) -> TopicMatch:
         return self._pick("same_topic").same_topic(label_a, label_b)
+
+    def answer(self, question: str, context: str) -> str:
+        return self._pick("answer").answer(question, context)

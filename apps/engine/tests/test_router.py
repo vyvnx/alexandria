@@ -27,6 +27,9 @@ class _Rec:
     def same_topic(self, a, b):
         self.called.append("same_topic")
 
+    def answer(self, question, context):
+        self.called.append("answer")
+
 
 def test_methods_dispatch_to_the_right_provider():
     default, small = _Rec("default"), _Rec("small")
@@ -78,3 +81,13 @@ def test_over_budget_without_fallback_keeps_normal_routing():
 def test_routed_llm_exposes_the_default_model():
     llm = build_llm(_settings(fallback_base_url="http://localhost:9090/v1"))
     assert llm.model == "gpt-4o-mini"
+
+
+def test_answer_dispatches_like_any_task():
+    default, fallback = _Rec("default"), _Rec("fallback")
+    flag = {"over": False}
+    r = RoutedLLM(default, {}, fallback=fallback, over_budget=lambda: flag["over"])
+    r.answer("q", "ctx")
+    flag["over"] = True
+    r.answer("q", "ctx")
+    assert default.called == ["answer"] and fallback.called == ["answer"]
