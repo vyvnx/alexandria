@@ -171,10 +171,40 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
+def _parse_feed_links(xml_text: str) -> list[str]:
+    """Item links from an RSS (`item/link` text) or Atom (`entry/link[@href]`,
+    alternate rel only) document, deduped in feed order. No host filtering —
+    the user curated this feed, so its links are trusted (unlike trafilatura's
+    courlan validation, which drops local/IP hosts)."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+    links: list[str] = []
+    for node in root.iter():
+        tag = node.tag.rsplit("}", 1)[-1]
+        if tag == "item":
+            for child in node:
+                if child.tag.rsplit("}", 1)[-1] == "link" and child.text:
+                    links.append(child.text.strip())
+        elif tag == "entry":
+            for child in node:
+                if (child.tag.rsplit("}", 1)[-1] == "link"
+                        and child.get("rel", "alternate") == "alternate"
+                        and child.get("href")):
+                    links.append(child.get("href").strip())
+    return list(dict.fromkeys(links))
+
+
 def discover_items(feed_url: str) -> list[str]:
-    """Article links for a feed url. The network seam — monkeypatched in tests."""
-    from trafilatura import feeds
-    return feeds.find_feed_urls(feed_url)
+    """Article links for a feed url. The network seam — monkeypatched in tests.
+    Feed documents are parsed directly; anything else (e.g. a homepage) falls
+    back to trafilatura's feed discovery."""
+    from trafilatura import fetch_url, feeds
+    raw = fetch_url(feed_url)
+    links = _parse_feed_links(raw) if raw else []
+    return links or feeds.find_feed_urls(feed_url)
 
 
 def poll_feeds(registry: IntakeRegistry, store, embedder, telemetry, settings, *,
@@ -187,6 +217,10 @@ def poll_feeds(registry: IntakeRegistry, store, embedder, telemetry, settings, *
     discover = discover or discover_items
     load = load or load_url
 
+    due = registry.due_feeds(now)
+    if not due:  # the worker calls this on every idle tick — stay cheap
+        return 0
+
     # relevance gate (A3b): embed the topic vocabulary once per pass; items
     # scoring under the threshold never cost an llm token. no topics ⇒ the
     # curation itself is the filter, admit everything.
@@ -194,7 +228,7 @@ def poll_feeds(registry: IntakeRegistry, store, embedder, telemetry, settings, *
     topic_vecs = embedder.embed(names, kind="query") if names else []
 
     enqueued = 0
-    for feed in registry.due_feeds(now):
+    for feed in due:
         try:
             links = discover(feed["url"])
         except Exception:

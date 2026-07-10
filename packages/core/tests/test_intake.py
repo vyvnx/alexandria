@@ -264,3 +264,47 @@ def test_explicit_topics_come_first_and_dedupe(world):
                               raw_text="", my_note=None, summary="")
         w["store"].add_edge(sid, concept, "about", from_source_id=sid)
     assert topic_names(w["reg"], w["store"], _gate_settings()) == ["aws"]
+
+
+# ── feed parsing ──────────────────────────────────────────────────────────────
+
+from alexandria_core.intake import _parse_feed_links
+
+RSS = """<?xml version="1.0"?><rss version="2.0"><channel>
+<item><title>A</title><link>http://127.0.0.1:8033/a.html</link></item>
+<item><title>B</title><link>http://127.0.0.1:8033/b.html</link></item>
+<item><title>B again</title><link>http://127.0.0.1:8033/b.html</link></item>
+</channel></rss>"""
+
+ATOM = """<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+<entry><link rel="alternate" href="https://x.dev/p1"/></entry>
+<entry><link href="https://x.dev/p2"/><link rel="enclosure" href="https://x.dev/p2.mp3"/></entry>
+</feed>"""
+
+
+def test_parse_rss_links_dedupes_and_keeps_local_hosts():
+    assert _parse_feed_links(RSS) == [
+        "http://127.0.0.1:8033/a.html", "http://127.0.0.1:8033/b.html"]
+
+
+def test_parse_atom_links_takes_alternates_only():
+    assert _parse_feed_links(ATOM) == ["https://x.dev/p1", "https://x.dev/p2"]
+
+
+def test_parse_garbage_returns_empty():
+    assert _parse_feed_links("not xml at all") == []
+    assert _parse_feed_links("<html><body>a page</body></html>") == []
+
+
+def test_idle_pass_with_no_due_feeds_never_touches_the_embedder(world):
+    w = world
+    fid = w["reg"].add_feed("https://a/rss")
+    w["reg"].mark_polled(fid)
+    w["reg"].add_topic("anything")
+
+    class _Boom:
+        def embed(self, texts, *, kind):
+            raise AssertionError("embedder must not run on an idle tick")
+
+    assert poll_feeds(w["reg"], w["store"], _Boom(), w["telemetry"], w["settings"],
+                      discover=lambda u: [], load=_doc) == 0

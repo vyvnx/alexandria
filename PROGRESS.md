@@ -6,7 +6,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 ## Horizons
 
 - [x] **H0 — Headroom** · plan: `docs/superpowers/plans/2026-07-09-target-architecture-h0.md` · done 2026-07-09, branch `feat/target-arch-h0` (147 py + 42 web tests green)
-- [ ] **H1 — It reads for you** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h1.md` ← ACTIVE
+- [x] **H1 — It reads for you** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h1.md` · done 2026-07-10, branch `feat/target-arch-h1` (192 py + 42 web tests green, verified e2e)
 - [ ] H2 — It thinks (algo core, insights, digests, GraphRAG) — trigger: ~10⁴ nodes
 - [ ] H3 — Billion-tier (Kùzu/Lance/DuckDB, LSH, tile server) — trigger: measured ceilings only
 
@@ -29,8 +29,13 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 - [x] Task 5 — F2: usage rollups — `TelemetryStore.usage()/spend_since()`, `GET /usage?days=N` (per-day/task/source), summary strip on the executions page
 - [x] Task 6 — F3: budgets — `budget_daily_usd`/`budget_monthly_usd` knobs, worker defers queued ingests while over budget, `/usage` reports the budget window state
 - [x] Task 7 — A4/F4: per-task routing + budget flip — `engine/router.py` `RoutedLLM` (per-task base URLs, shared instances per URL), over-budget ⇒ fallback provider instead of deferring; empty config byte-identical to before
-- [ ] Task 8 — web: `#/sources` management page
-- [ ] Task 9 — end-to-end verification
+- [x] Task 8 — web: `#/sources` management page — feeds table (poll now / remove / counts) + topic chips, StatusBar link, verified in the browser
+- [x] Task 9 — end-to-end verification (2026-07-10, fake LLM + local RSS server):
+  - gate open: feed item discovered → queued → pipeline succeeded → searchable in the graph
+  - topic added: second feed's item recorded `filtered` with its score, zero LLM calls
+  - re-poll: nothing re-ingested (item_seen + url dedup)
+  - `/usage` attributes calls per source/task; budget state reported
+  - findings fixed during e2e: `trafilatura.feeds` drops local/IP hosts (courlan) → stdlib RSS/Atom parser with `find_feed_urls` fallback; `poll_feeds` was embedding topics on every idle tick → now short-circuits when no feed is due
 
 Deferred from H1: F5 (no bulk op to gate), A2b PDF/OCR loader (own plan later), extra A2 loaders (additive behind the loader seam).
 
