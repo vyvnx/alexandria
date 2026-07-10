@@ -1,0 +1,27 @@
+# Target-architecture build progress
+
+Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
+**Resume here:** open the active plan, find the first unchecked task, continue.
+
+## Horizons
+
+- [ ] **H0 — Headroom** · plan: `docs/superpowers/plans/2026-07-09-target-architecture-h0.md` ← ACTIVE
+- [ ] H1 — It reads for you (source registry, loaders, relevance filter, budgets/routing) — plan to be written when H0 lands
+- [ ] H2 — It thinks (algo core, insights, digests, GraphRAG) — trigger: ~10⁴ nodes
+- [ ] H3 — Billion-tier (Kùzu/Lance/DuckDB, LSH, tile server) — trigger: measured ceilings only
+
+## H0 tasks
+
+- [x] Task 0 — baseline: fixed 2 indentation errors in `pipeline.py`, full suite green (121 py + 34 web), committed pre-existing provider consolidation
+- [ ] Task 1 — B1: trim `/graph` payload
+- [ ] Task 2 — F1: telemetry store + metered proxies (core)
+- [ ] Task 3 — F1: surface usage from OpenAI provider
+- [ ] Task 4 — F1: wire telemetry into API + `GET /executions`
+- [ ] Task 5 — F1: `/executions` web page
+- [ ] Task 6 — A1: persistent job queue
+
+## Notes for a fresh session
+
+- Test commands: `uv run pytest -q` (repo root), `pnpm test` in `apps/web`.
+- Queue/telemetry share one SQLite `execution` table (see plan header) — no Redis, by design.
+- `GET /ingest/{job_id}` response contract is frozen; the web ChartProgress polls it.
