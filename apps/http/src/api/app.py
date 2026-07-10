@@ -1,9 +1,12 @@
-import uuid
+import sqlite3
+import threading
+from contextlib import asynccontextmanager
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -11,10 +14,24 @@ from alexandria_core.config import get_settings, Settings
 from alexandria_core.graph.models import KIND_SOURCE
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.ingest.pipeline import ingest
+from alexandria_core.intake import IntakeRegistry, poll_feeds
 from alexandria_core.logging_config import configure_logging, get_logger
+from alexandria_core.telemetry import (
+    MeteredEmbedder, MeteredLLM, MeteredVision, TelemetryStore, set_current_execution,
+)
 from engine import factory
 
 log = get_logger("api")
+
+
+class FeedBody(BaseModel):
+    url: str
+    cadence_minutes: int = 60
+
+
+class TopicBody(BaseModel):
+    name: str
+    weight: float = 1.0
 
 
 class IngestBody(BaseModel):
@@ -27,25 +44,115 @@ class IngestBody(BaseModel):
 
 
 def create_app(store=None, llm=None, embedder=None, settings: Settings | None = None,
-               vision=None) -> FastAPI:
+               vision=None, registry=None) -> FastAPI:
     configure_logging()
     settings = settings or get_settings()
     if store is None:
         store = GraphStore(settings.db_path)
         store.init_schema()
-    llm = llm or factory.build_llm(settings)
-    embedder = embedder or factory.build_embedder(settings)
-    vision = vision or factory.build_vision(settings)
+    # curated feed/topic registry (A3) — domain data, lives in the graph db file
+    registry = registry or IntakeRegistry(settings.db_path)
+    # every provider (injected fakes included) is metered through the telemetry
+    # seam (F1): per-call task/tokens/cost/duration, grouped by ingest execution
+    telemetry = TelemetryStore(settings.executions_db_path,
+                               price_in_per_mtok=settings.price_in_per_mtok,
+                               price_out_per_mtok=settings.price_out_per_mtok)
+
+    # budgets (roadmap F3): metered spend against daily/monthly ceilings
+    def _window_start(kind: str) -> str:
+        now = datetime.now(timezone.utc)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if kind == "monthly":
+            start = start.replace(day=1)
+        return start.isoformat()
+
+    def _over_budget() -> str | None:
+        if (settings.budget_daily_usd
+                and telemetry.spend_since(_window_start("daily")) >= settings.budget_daily_usd):
+            return "daily"
+        if (settings.budget_monthly_usd
+                and telemetry.spend_since(_window_start("monthly")) >= settings.budget_monthly_usd):
+            return "monthly"
+        return None
+
+    llm = MeteredLLM(llm or factory.build_llm(
+        settings, over_budget=lambda: _over_budget() is not None), telemetry)
+    embedder = MeteredEmbedder(embedder or factory.build_embedder(settings), telemetry)
+    vision = MeteredVision(vision or factory.build_vision(settings), telemetry)
 
     log.info("Alexandria API ready — db=%s llm=%s vec=%s",
              settings.db_path, settings.llm, store.vec_available)
     if not store.vec_available:
         log.warning("sqlite-vec unavailable — /search falls back to name matching")
 
-    app = FastAPI(title="Alexandria")
+    # persistent ingest queue (roadmap A1): the execution row IS the job —
+    # POST /ingest enqueues it, the worker below claims and runs it, and the
+    # same row is what GET /executions lists. Queued jobs survive a restart.
+    # ponytail: one worker thread, one uvicorn process; add workers when
+    # ingest volume demands it
+    wake = threading.Event()
+    stop = threading.Event()
+
+    def _run_job(row: dict):
+        eid = row["id"]
+        body = IngestBody(**(row["payload"] or {}))
+        set_current_execution(eid)
+        try:
+            res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
+                         abstraction=body.abstraction, visual=body.visual, vision=vision,
+                         on_stage=lambda s: telemetry.set_stage(eid, s))
+            telemetry.finish_execution(eid, "succeeded", result=asdict(res))
+        except Exception:
+            log.exception("ingest failed for source=%s", row["source"])
+            telemetry.finish_execution(eid, "failed", error="ingest failed — see server logs")
+        finally:
+            set_current_execution(None)
+
+    budget_paused = False
+
+    def _worker():
+        nonlocal budget_paused
+        while not stop.is_set():
+            # ponytail: hard stop = defer everything until the window resets;
+            # salience-aware partial deferral is F4+ territory. with a local
+            # fallback configured, RoutedLLM flips there instead — keep running.
+            over = _over_budget() if not settings.fallback_base_url else None
+            if over is not None:
+                if not budget_paused:
+                    log.warning("llm budget (%s) reached — deferring queued ingests", over)
+                    budget_paused = True
+                wake.wait(timeout=0.5)
+                wake.clear()
+                continue
+            budget_paused = False
+            row = telemetry.claim_next()
+            if row is not None:
+                _run_job(row)
+                continue
+            # idle: poll due feeds (A3) — discovered items enter the same queue
+            try:
+                poll_feeds(registry, store, embedder, telemetry, settings)
+            except Exception:
+                log.exception("feed polling failed")
+            wake.wait(timeout=0.5)
+            wake.clear()
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        interrupted = telemetry.recover()
+        if interrupted:
+            log.warning("failed %d ingest job(s) interrupted by restart", interrupted)
+        threading.Thread(target=_worker, name="ingest-worker", daemon=True).start()
+        yield
+        stop.set()
+        wake.set()
+
+    app = FastAPI(title="Alexandria", lifespan=lifespan)
     app.state.store, app.state.llm, app.state.embedder, app.state.settings = (
         store, llm, embedder, settings)
     app.state.vision = vision
+    app.state.telemetry = telemetry
+    app.state.registry = registry
 
     def _node_dict(n):
         return {"id": n.id, "kind": n.kind, "name": n.name, "data": n.data}
@@ -68,37 +175,89 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             "extraction_abstraction": s.extraction_abstraction,
         }
 
-    # Ingest runs in the background so the UI can poll real stage progress.
-    # ponytail: unbounded in-memory dict — one small entry per ingest, single
-    # user, lost on restart. Add an LRU cap only if it ever grows.
-    jobs: dict[str, dict] = {}
-
-    def _run_ingest(job_id: str, body: IngestBody):
-        job = jobs[job_id]
-        try:
-            res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
-                         abstraction=body.abstraction, visual=body.visual, vision=vision,
-                         on_stage=lambda s: job.update(stage=s))
-            job.update(status="done", result=asdict(res))
-        except Exception:
-            log.exception("ingest failed for url=%s", body.url)
-            job.update(status="failed", error="ingest failed — see server logs")
-
     @app.post("/ingest")
-    def do_ingest(body: IngestBody, background: BackgroundTasks):
+    def do_ingest(body: IngestBody):
         if not body.url and not body.note:
             raise HTTPException(400, "provide url and/or note")
-        job_id = uuid.uuid4().hex
-        jobs[job_id] = {"status": "running", "stage": "queued", "result": None, "error": None}
-        background.add_task(_run_ingest, job_id, body)
-        return {"job_id": job_id}
+        job_id = telemetry.enqueue(body.url or "note", body.model_dump())
+        wake.set()
+        return {"job_id": str(job_id)}
+
+    # frozen polling contract for the web ChartProgress: status running|done|failed
+    _JOB_STATUS = {"queued": "running", "running": "running",
+                   "succeeded": "done", "failed": "failed"}
 
     @app.get("/ingest/{job_id}")
     def ingest_status(job_id: str):
-        job = jobs.get(job_id)
-        if job is None:
+        row = telemetry.get_execution(int(job_id)) if job_id.isdigit() else None
+        if row is None:
             raise HTTPException(404, "unknown job")
-        return job
+        return {"status": _JOB_STATUS[row["status"]], "stage": row["stage"],
+                "result": row["result"], "error": row["error"]}
+
+    @app.get("/executions")
+    def executions(limit: int = 50):
+        # cost/status ledger for the /executions panel (F1)
+        return telemetry.list_executions(limit)
+
+    @app.get("/usage")
+    def usage(days: int = 30):
+        # where the money goes (F2): totals + per-day/task/source rollups
+        u = telemetry.usage(days)
+        u["budget"] = {
+            "daily_usd": settings.budget_daily_usd,
+            "monthly_usd": settings.budget_monthly_usd,
+            "spent_today_usd": telemetry.spend_since(_window_start("daily")),
+            "spent_month_usd": telemetry.spend_since(_window_start("monthly")),
+            "over": _over_budget(),
+        }
+        return u
+
+    @app.get("/feeds")
+    def list_feeds():
+        return registry.list_feeds()
+
+    @app.post("/feeds")
+    def add_feed(body: FeedBody):
+        try:
+            fid = registry.add_feed(body.url, cadence_minutes=body.cadence_minutes)
+        except sqlite3.IntegrityError:
+            raise HTTPException(409, "feed already registered")
+        return {"id": fid}
+
+    @app.delete("/feeds/{feed_id}")
+    def remove_feed(feed_id: int):
+        if not registry.feed_exists(feed_id):
+            raise HTTPException(404, "unknown feed")
+        registry.remove_feed(feed_id)
+        return {"removed": feed_id}
+
+    @app.post("/feeds/{feed_id}/poll")
+    def poll_feed(feed_id: int):
+        if not registry.feed_exists(feed_id):
+            raise HTTPException(404, "unknown feed")
+        registry.poll_now(feed_id)
+        wake.set()
+        return {"polling": feed_id}
+
+    @app.get("/topics")
+    def list_topics():
+        return registry.list_topics()
+
+    @app.post("/topics")
+    def add_topic(body: TopicBody):
+        try:
+            tid = registry.add_topic(body.name, weight=body.weight)
+        except sqlite3.IntegrityError:
+            raise HTTPException(409, "topic already exists")
+        return {"id": tid}
+
+    @app.delete("/topics/{topic_id}")
+    def remove_topic(topic_id: int):
+        if not registry.topic_exists(topic_id):
+            raise HTTPException(404, "unknown topic")
+        registry.remove_topic(topic_id)
+        return {"removed": topic_id}
 
     @app.get("/graph")
     def graph(node_id: int | None = None, k: int = 2):
@@ -110,7 +269,9 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             nodes = store.all_nodes()
             edges = store.all_edges()
         return {
-            "nodes": [_node_dict(n) for n in nodes],
+            # trimmed wire shape (roadmap B1): no data blob — the dossier
+            # lazy-loads it via /node/{id}
+            "nodes": [{"id": n.id, "kind": n.kind, "name": n.name} for n in nodes],
             "edges": [{"src": e.src_id, "dst": e.dst_id, "type": e.type, "weight": e.weight}
                       for e in edges],
         }

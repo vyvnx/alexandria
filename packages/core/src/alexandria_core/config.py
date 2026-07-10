@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     # empty ⇒ api.openai.com
     openai_base_url: str = ""
 
+    # Per-task routing (roadmap A4/F4, small-model roadmap item B): optional
+    # base-URL overrides so easy jobs hit a small local server; empty ⇒ the
+    # default provider. fallback_base_url is where ALL tasks go when the F3
+    # budget is exhausted (instead of deferring the queue).
+    summarize_base_url: str = ""
+    extract_base_url: str = ""
+    relate_base_url: str = ""
+    same_topic_base_url: str = ""
+    fallback_base_url: str = ""
+
     # visual enrichment (opt-in): screenshot + VLM read of the tables/charts/
     # figures trafilatura drops. see docs/superpowers/specs/2026-07-02-pixelrag-*.
     openai_vision_model: str = "gpt-4o-mini"
@@ -34,6 +44,27 @@ class Settings(BaseSettings):
     screenshot_max_segments: int = 4      # cap tall-page slices -> bounds VLM cost
 
     db_path: str = "../data/alexandria.db"
+
+    # Intake (roadmap A3): feed polling backpressure — max items one poll pass
+    # may enqueue per feed; the rest wait for the next cadence.
+    feed_batch_max: int = 10
+    # Relevance gate (A3b): min cosine between an item and the nearest topic
+    # (explicit + learned) for it to enter the pipeline. No topics ⇒ gate off.
+    relevance_threshold: float = 0.35
+    learned_topics_top_n: int = 10
+
+    # Cost telemetry (roadmap F1): executions + per-call ledger, its own SQLite
+    # file next to the graph db. Prices are $ per 1M tokens for the configured
+    # model; 0 (unset) ⇒ cost reported as tokens only.
+    executions_db_path: str = "../data/executions.db"
+    price_in_per_mtok: float = 0.0
+    price_out_per_mtok: float = 0.0
+
+    # Budgets (roadmap F3): $ ceilings on metered llm spend; 0 ⇒ off. Over
+    # budget the worker defers queued ingests until the window resets (or
+    # routes everything to fallback_base_url when one is configured — F4).
+    budget_daily_usd: float = 0.0
+    budget_monthly_usd: float = 0.0
     embed_model: str = "Qwen/Qwen3-Embedding-0.6B"
     embed_dim: int = 1024
     similar_top_k: int = 5
@@ -68,7 +99,7 @@ class Settings(BaseSettings):
     min_galaxy_size: int = 3              # communities below this draw no hull (lone stars)
 
 
-    @field_validator("db_path")
+    @field_validator("db_path", "executions_db_path")
     @classmethod
     def _anchor_db_path(cls, v: str) -> str:
         # A relative db_path would otherwise be resolved by sqlite against the

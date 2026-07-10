@@ -6,18 +6,42 @@ from alexandria_core.providers.fake import FakeLLM, FakeEmbedder
 log = get_logger("llm")
 
 
-def build_llm(settings: Settings) -> LLMProvider:
+def build_llm(settings: Settings, over_budget=None) -> LLMProvider:
     if settings.llm == "fake":
         log.info("LLM provider: fake (no real extraction)")
         return FakeLLM()
     if settings.llm == "openai":
         if not settings.openai_api_key:
             log.warning("ALEX_LLM=openai but no API key set — calls will fail")
-        log.info("LLM provider: openai (model=%s, base_url=%s)",
-                 settings.openai_model, settings.openai_base_url or "default")
         from .openai_provider import OpenAIProvider
-        return OpenAIProvider(api_key=settings.openai_api_key, model=settings.openai_model,
-                              base_url=settings.openai_base_url or None)
+
+        providers: dict[str, OpenAIProvider] = {}
+
+        def get(url: str) -> OpenAIProvider:
+            # one provider per distinct url — tasks sharing a server share it
+            if url not in providers:
+                providers[url] = OpenAIProvider(
+                    api_key=settings.openai_api_key, model=settings.openai_model,
+                    base_url=url or None)
+            return providers[url]
+
+        overrides = {task: getattr(settings, f"{task}_base_url")
+                     for task in ("summarize", "extract", "relate", "same_topic")}
+        overrides = {task: url for task, url in overrides.items() if url}
+        if not overrides and not settings.fallback_base_url:
+            log.info("LLM provider: openai (model=%s, base_url=%s)",
+                     settings.openai_model, settings.openai_base_url or "default")
+            return get(settings.openai_base_url)
+
+        from .router import RoutedLLM
+        log.info("LLM provider: openai routed (model=%s, overrides=%s, fallback=%s)",
+                 settings.openai_model, sorted(overrides) or "none",
+                 settings.fallback_base_url or "none")
+        return RoutedLLM(
+            get(settings.openai_base_url),
+            {task: get(url) for task, url in overrides.items()},
+            fallback=get(settings.fallback_base_url) if settings.fallback_base_url else None,
+            over_budget=over_budget)
     raise ValueError(f"unknown llm provider: {settings.llm}")
 
 

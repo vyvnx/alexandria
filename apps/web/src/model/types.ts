@@ -32,7 +32,8 @@ export interface WireNode {
   id: number;
   kind: NodeKind;
   name: string;
-  data: Record<string, unknown>;
+  /** only on `/node/{id}` — `/graph` ships the trimmed shape (roadmap B1) */
+  data?: Record<string, unknown>;
 }
 
 export interface WireEdge {
@@ -104,6 +105,54 @@ export interface IngestJob {
   stage: IngestStage;
   result: IngestResult | null;
   error: string | null;
+}
+
+/* One ingest run in the executions ledger, from `GET /executions` (F1). */
+export interface ExecutionTaskStats {
+  calls: number;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  cost_usd: number | null;
+}
+
+export interface ExecutionRow {
+  id: number;
+  source: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  stage: string;
+  queued_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_usd: number | null;
+  tasks: Record<string, ExecutionTaskStats>;
+}
+
+/* Curated intake registry (A3): feeds polled on a cadence + gate topics. */
+export interface FeedRow {
+  id: number;
+  url: string;
+  cadence_minutes: number;
+  active: number;
+  last_polled_at: string | null;
+  items: { enqueued: number; filtered: number; error: number };
+}
+
+export interface TopicRow {
+  id: number;
+  name: string;
+  weight: number;
+}
+
+/* Rollups from `GET /usage` (F2) — only what the summary strip reads. */
+export interface UsageSummary {
+  days: number;
+  total_calls: number;
+  total_cost_usd: number;
+  prompt_tokens: number;
+  completion_tokens: number;
 }
 
 export interface Health {

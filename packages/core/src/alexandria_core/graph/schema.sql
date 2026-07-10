@@ -23,8 +23,11 @@ CREATE TABLE IF NOT EXISTS sources (
   raw_text     TEXT,
   my_note      TEXT,
   summary      TEXT,
-  ingested_at  TEXT
+  ingested_at  TEXT,
+  content_hash TEXT                -- sha256 of the ingested text; dedup gate (A5)
 );
+CREATE INDEX IF NOT EXISTS idx_sources_hash ON sources(content_hash);
+CREATE INDEX IF NOT EXISTS idx_sources_url ON sources(url);
 CREATE TABLE IF NOT EXISTS log (
   id     INTEGER PRIMARY KEY,
   ts     TEXT NOT NULL,

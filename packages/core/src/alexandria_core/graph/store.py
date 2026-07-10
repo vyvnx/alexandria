@@ -40,6 +40,11 @@ class GraphStore:
             return False
 
     def init_schema(self) -> None:
+        # lazy migration: dbs created before the dedup column need it added
+        # before schema.sql's index on it can be created
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(sources)")]
+        if cols and "content_hash" not in cols:
+            self.conn.execute("ALTER TABLE sources ADD COLUMN content_hash TEXT")
         sql = (resources.files("alexandria_core.graph") / "schema.sql").read_text()
         self.conn.executescript(sql)
         if self.vec_available:
@@ -77,18 +82,29 @@ class GraphStore:
 
     # ---- sources ----
     def add_source(self, node_id: int, *, url, author, published_at,
-                   raw_text, my_note, summary) -> None:
+                   raw_text, my_note, summary, content_hash=None) -> None:
         self.conn.execute(
             "INSERT OR REPLACE INTO sources"
-            "(node_id,url,author,published_at,raw_text,my_note,summary,ingested_at)"
-            " VALUES (?,?,?,?,?,?,?,?)",
-            (node_id, url, author, published_at, raw_text, my_note, summary, _now()),
+            "(node_id,url,author,published_at,raw_text,my_note,summary,ingested_at,"
+            "content_hash) VALUES (?,?,?,?,?,?,?,?,?)",
+            (node_id, url, author, published_at, raw_text, my_note, summary, _now(),
+             content_hash),
         )
         self.conn.commit()
 
     def get_source(self, node_id: int) -> dict | None:
         r = self.conn.execute("SELECT * FROM sources WHERE node_id=?", (node_id,)).fetchone()
         return dict(r) if r else None
+
+    def find_source_by_url(self, url: str) -> int | None:
+        r = self.conn.execute("SELECT node_id FROM sources WHERE url=? LIMIT 1",
+                              (url,)).fetchone()
+        return r["node_id"] if r else None
+
+    def find_source_by_hash(self, content_hash: str) -> int | None:
+        r = self.conn.execute("SELECT node_id FROM sources WHERE content_hash=? LIMIT 1",
+                              (content_hash,)).fetchone()
+        return r["node_id"] if r else None
 
     # ---- edges ----
     def add_edge(self, src_id: int, dst_id: int, type: str, *,
