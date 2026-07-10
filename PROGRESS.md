@@ -6,7 +6,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 ## Horizons
 
 - [x] **H0 — Headroom** · plan: `docs/superpowers/plans/2026-07-09-target-architecture-h0.md` · done 2026-07-09, branch `feat/target-arch-h0` (147 py + 42 web tests green)
-- [ ] H1 — It reads for you (source registry, loaders, relevance filter, budgets/routing) — plan to be written when H0 lands
+- [ ] **H1 — It reads for you** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h1.md` ← ACTIVE
 - [ ] H2 — It thinks (algo core, insights, digests, GraphRAG) — trigger: ~10⁴ nodes
 - [ ] H3 — Billion-tier (Kùzu/Lance/DuckDB, LSH, tile server) — trigger: measured ceilings only
 
@@ -19,6 +19,20 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 - [x] Task 4 — F1: wire telemetry into API + `GET /executions` — providers wrapped in `create_app`, ingests bracketed by executions, `.env.example` documents the knobs
 - [x] Task 5 — F1: `/executions` web page — hash-routed `ExecutionsPage` (`#/executions`), StatusBar link, formatters unit-tested, verified in the browser against a live fake ingest
 - [x] Task 6 — A1: persistent job queue — execution table doubles as the queue (`enqueue`/`claim_next`/`recover`), single daemon worker via lifespan, in-memory jobs dict deleted, `/ingest` contract unchanged. Verified live: stuck `running` job failed as "interrupted by restart" on boot; queued→running→done polling; trimmed `/graph`.
+
+## H1 tasks
+
+- [ ] Task 1 — A5: dedup before the LLM (url + content hash)
+- [ ] Task 2 — A3: intake registry (feeds + topics) + HTTP CRUD
+- [ ] Task 3 — A3: feed poller in the worker loop
+- [ ] Task 4 — A3b: topic-relevance gate
+- [ ] Task 5 — F2: usage rollups (`GET /usage` + panel strip)
+- [ ] Task 6 — F3: budgets (hard stop = defer queue)
+- [ ] Task 7 — A4/F4: per-task routing + budget flip to local
+- [ ] Task 8 — web: `#/sources` management page
+- [ ] Task 9 — end-to-end verification
+
+Deferred from H1: F5 (no bulk op to gate), A2b PDF/OCR loader (own plan later), extra A2 loaders (additive behind the loader seam).
 
 ## Notes for a fresh session
 
