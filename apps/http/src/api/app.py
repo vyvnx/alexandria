@@ -15,6 +15,7 @@ from alexandria_core.graph.models import KIND_SOURCE
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.ingest.pipeline import ingest
 from alexandria_core.ask import ask as graphrag_ask
+from alexandria_core.digest import build_digest, render_digest
 from alexandria_core.insights import compute_insights
 from alexandria_core.intake import IntakeRegistry, poll_feeds
 from alexandria_core.logging_config import configure_logging, get_logger
@@ -213,6 +214,14 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         if not q.strip():
             raise HTTPException(400, "provide a question via ?q=")
         return graphrag_ask(store, embedder, llm, settings, q)
+
+    @app.get("/digest")
+    def digest(days: int = 7, narrative: bool = False):
+        # weekly digest (D4); llm narrative is opt-in so a page load spends nothing
+        d = build_digest(store, settings, days=days)
+        if narrative:
+            d["narrative"] = llm.summarize(render_digest(d))
+        return d
 
     @app.get("/usage")
     def usage(days: int = 30):

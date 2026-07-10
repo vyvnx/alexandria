@@ -46,7 +46,7 @@ Deferred from H1: F5 (no bulk op to gate), A2b PDF/OCR loader (own plan later), 
 - [x] Task 3 — D5: pagerank-derived topics — `topic_names` learned half = recurring interests ∪ top-pagerank concepts, capped
 - [x] Task 4 — D3: `answer()` provider seam — protocol + fake + openai (cited, context-only prompt) + metered + routed
 - [x] Task 5 — D3: GraphRAG — `ask.py` (knn seeds + k-hop expansion → numbered passages, name-match fallback, empty graph short-circuits without llm) + `GET /ask?q=`
-- [ ] Task 6 — D4: digest + `GET /digest`
+- [x] Task 6 — D4: digest — `digest.py` (window counts, pagerank newcomers, trending, resurface-untouched, contradiction count) + `GET /digest?days&narrative` (narrative = opt-in llm call)
 - [ ] Task 7 — web: `#/insights` page
 - [ ] Task 8 — A2b: digital-PDF loader + upload ingest
 - [ ] Task 9 — end-to-end verification

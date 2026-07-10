@@ -280,6 +280,18 @@ def test_ask_requires_a_question(client):
     assert c.get("/ask").status_code == 400
 
 
+def test_digest_counts_the_week(client):
+    c, _ = client
+    _ingest(c, note="Attention mechanisms power transformers today.")
+    calls_before = len(c.get("/executions").json()[0]["tasks"])
+    d = c.get("/digest").json()
+    assert d["new_sources"] == 1 and d["new_nodes"] > 1
+    assert "narrative" not in d  # default spends nothing
+    d2 = c.get("/digest", params={"narrative": "true"}).json()
+    assert d2["narrative"]
+    assert calls_before >= 1  # sanity: the ingest itself was metered
+
+
 def test_usage_rollup_after_ingest(client):
     c, _ = client
     _ingest(c, note="Attention mechanisms power transformers.")
