@@ -6,7 +6,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 ## Horizons
 
 - [x] **H0 — Headroom** · plan: `docs/superpowers/plans/2026-07-09-target-architecture-h0.md` · done 2026-07-09, branch `feat/target-arch-h0` (147 py + 42 web tests green)
-- [x] **H1 — It reads for you** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h1.md` · done 2026-07-10, branch `feat/target-arch-h1` (192 py + 42 web tests green, verified e2e)
+- [x] **H1 — It reads for you** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h1.md` · done 2026-07-10, merged to main 2026-07-10 (192 py + 42 web tests green, verified e2e)
 - [ ] H2 — It thinks (algo core, insights, digests, GraphRAG) — trigger: ~10⁴ nodes
 - [ ] H3 — Billion-tier (Kùzu/Lance/DuckDB, LSH, tile server) — trigger: measured ceilings only
 
