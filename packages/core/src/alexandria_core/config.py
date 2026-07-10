@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     executions_db_path: str = "../data/executions.db"
     price_in_per_mtok: float = 0.0
     price_out_per_mtok: float = 0.0
+
+    # Budgets (roadmap F3): $ ceilings on metered llm spend; 0 ⇒ off. Over
+    # budget the worker defers queued ingests until the window resets (or
+    # routes everything to fallback_base_url when one is configured — F4).
+    budget_daily_usd: float = 0.0
+    budget_monthly_usd: float = 0.0
     embed_model: str = "Qwen/Qwen3-Embedding-0.6B"
     embed_dim: int = 1024
     similar_top_k: int = 5

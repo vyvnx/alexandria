@@ -267,6 +267,49 @@ def test_usage_rollup_after_ingest(client):
     assert u["per_source"][0]["source"] == "note"
 
 
+class _PricedLLM(FakeLLM):
+    """burns ~$1 of fake spend per summarize (at $1/M prompt tokens)"""
+
+    def summarize(self, text):
+        from alexandria_core.telemetry import add_usage
+        add_usage(1_000_000, 0)
+        return super().summarize(text)
+
+
+def _budget_client(**settings_kw):
+    store = GraphStore(":memory:")
+    store.init_schema()
+    app = create_app(store=store, llm=_PricedLLM(), embedder=FakeEmbedder(),
+                     registry=IntakeRegistry(":memory:"),
+                     settings=Settings(_env_file=None, llm="fake",
+                                       executions_db_path=":memory:",
+                                       price_in_per_mtok=1.0, **settings_kw))
+    return TestClient(app)
+
+
+def test_budget_hard_stop_defers_the_queue():
+    with _budget_client(budget_daily_usd=0.5) as c:
+        # first ingest runs (spend starts at 0) and blows the daily budget
+        first = c.post("/ingest", json={"note": "first note"}).json()["job_id"]
+        assert _wait(c, first)["status"] == "done"
+        # second ingest stays queued — the worker defers while over budget
+        second = c.post("/ingest", json={"note": "second note"}).json()["job_id"]
+        time.sleep(0.8)  # a few worker ticks
+        job = c.get(f"/ingest/{second}").json()
+        assert job["status"] == "running" and job["stage"] == "queued"
+        assert c.get("/usage").json()["budget"]["over"] == "daily"
+
+
+def test_no_budget_processes_everything():
+    with _budget_client() as c:
+        for note in ("first note", "second note"):
+            job = c.post("/ingest", json={"note": note}).json()["job_id"]
+            assert _wait(c, job)["status"] == "done"
+        budget = c.get("/usage").json()["budget"]
+        assert budget["over"] is None
+        assert budget["spent_today_usd"] >= 2.0
+
+
 def test_feeds_crud(client):
     c, _ = client
     r = c.post("/feeds", json={"url": "https://blog.example/rss", "cadence_minutes": 30})

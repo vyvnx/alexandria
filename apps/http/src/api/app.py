@@ -2,6 +2,7 @@ import sqlite3
 import threading
 from contextlib import asynccontextmanager
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -65,6 +66,23 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     if not store.vec_available:
         log.warning("sqlite-vec unavailable — /search falls back to name matching")
 
+    # budgets (roadmap F3): metered spend against daily/monthly ceilings
+    def _window_start(kind: str) -> str:
+        now = datetime.now(timezone.utc)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if kind == "monthly":
+            start = start.replace(day=1)
+        return start.isoformat()
+
+    def _over_budget() -> str | None:
+        if (settings.budget_daily_usd
+                and telemetry.spend_since(_window_start("daily")) >= settings.budget_daily_usd):
+            return "daily"
+        if (settings.budget_monthly_usd
+                and telemetry.spend_since(_window_start("monthly")) >= settings.budget_monthly_usd):
+            return "monthly"
+        return None
+
     # persistent ingest queue (roadmap A1): the execution row IS the job —
     # POST /ingest enqueues it, the worker below claims and runs it, and the
     # same row is what GET /executions lists. Queued jobs survive a restart.
@@ -88,8 +106,22 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         finally:
             set_current_execution(None)
 
+    budget_paused = False
+
     def _worker():
+        nonlocal budget_paused
         while not stop.is_set():
+            # ponytail: hard stop = defer everything until the window resets;
+            # salience-aware partial deferral is F4+ territory
+            over = _over_budget()
+            if over is not None:
+                if not budget_paused:
+                    log.warning("llm budget (%s) reached — deferring queued ingests", over)
+                    budget_paused = True
+                wake.wait(timeout=0.5)
+                wake.clear()
+                continue
+            budget_paused = False
             row = telemetry.claim_next()
             if row is not None:
                 _run_job(row)
@@ -168,7 +200,15 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     @app.get("/usage")
     def usage(days: int = 30):
         # where the money goes (F2): totals + per-day/task/source rollups
-        return telemetry.usage(days)
+        u = telemetry.usage(days)
+        u["budget"] = {
+            "daily_usd": settings.budget_daily_usd,
+            "monthly_usd": settings.budget_monthly_usd,
+            "spent_today_usd": telemetry.spend_since(_window_start("daily")),
+            "spent_month_usd": telemetry.spend_since(_window_start("monthly")),
+            "over": _over_budget(),
+        }
+        return u
 
     @app.get("/feeds")
     def list_feeds():
