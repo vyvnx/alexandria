@@ -4,8 +4,11 @@
 
 import type {
   Abstraction,
+  AskResult,
+  Digest,
   ExecutionRow,
   FeedRow,
+  Insights,
   GraphResponse,
   Health,
   IngestJob,
@@ -87,6 +90,12 @@ export const api = {
 
   /** Cost rollups for the summary strip. */
   usage: (days = 30) => request<UsageSummary>(`/usage?days=${days}`),
+
+  /** Intelligence layer (D2–D4). */
+  insights: () => request<Insights>("/insights"),
+  ask: (q: string) => request<AskResult>(`/ask?q=${encodeURIComponent(q)}`),
+  digest: (narrative = false) =>
+    request<Digest>(`/digest${narrative ? "?narrative=true" : ""}`),
 
   /** Curated intake registry (A3). */
   feeds: () => request<FeedRow[]>("/feeds"),
