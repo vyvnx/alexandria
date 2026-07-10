@@ -3,10 +3,11 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./app/App";
 import { ExecutionsPage } from "./ui/ExecutionsPage";
+import { SourcesPage } from "./ui/SourcesPage";
 import "./index.css";
 
-// hash routing: two pages, no router dependency. `#/executions` is the cost
-// panel; anything else is the atlas.
+// hash routing: a few pages, no router dependency. `#/executions` is the cost
+// panel, `#/sources` the intake registry; anything else is the atlas.
 function Root() {
   const [hash, setHash] = useState(window.location.hash);
   useEffect(() => {
@@ -14,7 +15,9 @@ function Root() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-  return hash.startsWith("#/executions") ? <ExecutionsPage /> : <App />;
+  if (hash.startsWith("#/executions")) return <ExecutionsPage />;
+  if (hash.startsWith("#/sources")) return <SourcesPage />;
+  return <App />;
 }
 
 // Note: intentionally no <StrictMode>. It double-invokes effects in dev, which

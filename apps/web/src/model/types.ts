@@ -130,6 +130,22 @@ export interface ExecutionRow {
   tasks: Record<string, ExecutionTaskStats>;
 }
 
+/* Curated intake registry (A3): feeds polled on a cadence + gate topics. */
+export interface FeedRow {
+  id: number;
+  url: string;
+  cadence_minutes: number;
+  active: number;
+  last_polled_at: string | null;
+  items: { enqueued: number; filtered: number; error: number };
+}
+
+export interface TopicRow {
+  id: number;
+  name: string;
+  weight: number;
+}
+
 /* Rollups from `GET /usage` (F2) — only what the summary strip reads. */
 export interface UsageSummary {
   days: number;

@@ -5,11 +5,13 @@
 import type {
   Abstraction,
   ExecutionRow,
+  FeedRow,
   GraphResponse,
   Health,
   IngestJob,
   NodeDetail,
   SearchHit,
+  TopicRow,
   UsageSummary,
   VizConfig,
 } from "../model/types";
@@ -85,4 +87,24 @@ export const api = {
 
   /** Cost rollups for the summary strip. */
   usage: (days = 30) => request<UsageSummary>(`/usage?days=${days}`),
+
+  /** Curated intake registry (A3). */
+  feeds: () => request<FeedRow[]>("/feeds"),
+  addFeed: (url: string, cadence_minutes = 60) =>
+    request<{ id: number }>("/feeds", {
+      method: "POST",
+      body: JSON.stringify({ url, cadence_minutes }),
+    }),
+  removeFeed: (id: number) =>
+    request<{ removed: number }>(`/feeds/${id}`, { method: "DELETE" }),
+  pollFeed: (id: number) =>
+    request<{ polling: number }>(`/feeds/${id}/poll`, { method: "POST" }),
+  topics: () => request<TopicRow[]>("/topics"),
+  addTopic: (name: string) =>
+    request<{ id: number }>("/topics", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  removeTopic: (id: number) =>
+    request<{ removed: number }>(`/topics/${id}`, { method: "DELETE" }),
 };
