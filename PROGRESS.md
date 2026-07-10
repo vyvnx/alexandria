@@ -7,7 +7,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 
 - [x] **H0 — Headroom** · plan: `docs/superpowers/plans/2026-07-09-target-architecture-h0.md` · done 2026-07-09, branch `feat/target-arch-h0` (147 py + 42 web tests green)
 - [x] **H1 — It reads for you** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h1.md` · done 2026-07-10, merged to main 2026-07-10 (192 py + 42 web tests green, verified e2e)
-- [ ] **H2 — It thinks** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h2.md` ← ACTIVE (trigger overridden by user: "implement it all")
+- [x] **H2 — It thinks** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h2.md` · done 2026-07-10, branch `feat/target-arch-h2` (221 py + 42 web tests green, verified e2e)
 - [ ] H3 — Billion-tier (Kùzu/Lance/DuckDB, LSH, tile server) — trigger: measured ceilings only
 
 ## H0 tasks
@@ -49,7 +49,12 @@ Deferred from H1: F5 (no bulk op to gate), A2b PDF/OCR loader (own plan later), 
 - [x] Task 6 — D4: digest — `digest.py` (window counts, pagerank newcomers, trending, resurface-untouched, contradiction count) + `GET /digest?days&narrative` (narrative = opt-in llm call)
 - [x] Task 7 — web: `#/insights` page — ask box with citation chips, six insight sections, opt-in digest narrative; StatusBar link (browser check in task 9)
 - [x] Task 8 — A2b: digital-PDF ingestion — `load_pdf` (pymupdf text layer), pipeline accepts preloaded docs, `POST /ingest/file` stores uploads content-addressed under `data/uploads/`; scanned pdfs fail with an actionable ocr message (tesseract = user install, still deferred)
-- [ ] Task 9 — end-to-end verification
+- [x] Task 9 — end-to-end verification (2026-07-10, fake LLM):
+  - 4 themed ingests → `/insights` split them into distinct communities, ranked interests by pagerank, surfaced bridges
+  - `/ask` returned a cited answer (12 passages); `/digest?narrative=true` counted the window and narrated it
+  - PDF upload → text layer ingested (8 nodes), re-upload deduped, file stored content-addressed under `data/uploads/`
+  - `#/insights` verified in the browser: ask box + citation chips + all six sections render
+  - known fake-mode artifact: FakeLLM extracts the pipeline's own "MY TAKE:" scaffold as entities — cosmetic, fake provider only
 
 Out of H2 scope (stated triggers/limits): OCR for scanned PDFs (needs the tesseract system binary — user install), Rust→WASM algo core (renderer seam, E-track), H3 storage rungs (measured ceilings only), F5 (no bulk op to gate).
 
