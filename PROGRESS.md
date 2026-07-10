@@ -7,7 +7,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 
 - [x] **H0 — Headroom** · plan: `docs/superpowers/plans/2026-07-09-target-architecture-h0.md` · done 2026-07-09, branch `feat/target-arch-h0` (147 py + 42 web tests green)
 - [x] **H1 — It reads for you** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h1.md` · done 2026-07-10, merged to main 2026-07-10 (192 py + 42 web tests green, verified e2e)
-- [ ] H2 — It thinks (algo core, insights, digests, GraphRAG) — trigger: ~10⁴ nodes
+- [ ] **H2 — It thinks** · plan: `docs/superpowers/plans/2026-07-10-target-architecture-h2.md` ← ACTIVE (trigger overridden by user: "implement it all")
 - [ ] H3 — Billion-tier (Kùzu/Lance/DuckDB, LSH, tile server) — trigger: measured ceilings only
 
 ## H0 tasks
@@ -38,6 +38,20 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
   - findings fixed during e2e: `trafilatura.feeds` drops local/IP hosts (courlan) → stdlib RSS/Atom parser with `find_feed_urls` fallback; `poll_feeds` was embedding topics on every idle tick → now short-circuits when no feed is due
 
 Deferred from H1: F5 (no bulk op to gate), A2b PDF/OCR loader (own plan later), extra A2 loaders (additive behind the loader seam).
+
+## H2 tasks
+
+- [ ] Task 1 — D1: algo core (pagerank, louvain, betweenness, link prediction)
+- [ ] Task 2 — D2: structural insights + `GET /insights`
+- [ ] Task 3 — D5: pagerank-derived topics close the intake loop
+- [ ] Task 4 — D3: `answer()` provider seam
+- [ ] Task 5 — D3: GraphRAG retrieval + `GET /ask`
+- [ ] Task 6 — D4: digest + `GET /digest`
+- [ ] Task 7 — web: `#/insights` page
+- [ ] Task 8 — A2b: digital-PDF loader + upload ingest
+- [ ] Task 9 — end-to-end verification
+
+Out of H2 scope (stated triggers/limits): OCR for scanned PDFs (needs the tesseract system binary — user install), Rust→WASM algo core (renderer seam, E-track), H3 storage rungs (measured ceilings only), F5 (no bulk op to gate).
 
 ## Notes for a fresh session
 
