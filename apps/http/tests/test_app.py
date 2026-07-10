@@ -267,6 +267,19 @@ def test_insights_after_ingests(client):
     assert ins["communities"]
 
 
+def test_ask_answers_with_citations(client):
+    c, _ = client
+    _ingest(c, note="Attention mechanisms power transformers today.")
+    res = c.get("/ask", params={"q": "what powers transformers?"}).json()
+    assert res["answer"] and res["passages"] >= 1
+    assert res["citations"] and all("name" in cit for cit in res["citations"])
+
+
+def test_ask_requires_a_question(client):
+    c, _ = client
+    assert c.get("/ask").status_code == 400
+
+
 def test_usage_rollup_after_ingest(client):
     c, _ = client
     _ingest(c, note="Attention mechanisms power transformers.")

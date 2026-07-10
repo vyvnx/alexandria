@@ -14,6 +14,7 @@ from alexandria_core.config import get_settings, Settings
 from alexandria_core.graph.models import KIND_SOURCE
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.ingest.pipeline import ingest
+from alexandria_core.ask import ask as graphrag_ask
 from alexandria_core.insights import compute_insights
 from alexandria_core.intake import IntakeRegistry, poll_feeds
 from alexandria_core.logging_config import configure_logging, get_logger
@@ -205,6 +206,13 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     def insights():
         # structural insights over the graph tier (D2), computed on demand
         return compute_insights(store, settings)
+
+    @app.get("/ask")
+    def ask_endpoint(q: str = ""):
+        # graphrag q&a (D3): cited answer from a connected subgraph
+        if not q.strip():
+            raise HTTPException(400, "provide a question via ?q=")
+        return graphrag_ask(store, embedder, llm, settings, q)
 
     @app.get("/usage")
     def usage(days: int = 30):
