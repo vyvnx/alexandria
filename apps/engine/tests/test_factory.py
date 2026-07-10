@@ -16,10 +16,17 @@ def test_factory_builds_embedder_with_fixed_dim():
 
 
 def test_factory_llm_dispatch_is_lazy():
-    # openai/ollama are imported lazily so missing creds don't break "fake"
+    # openai is imported lazily so missing creds don't break "fake"
     s = Settings(_env_file=None, llm="openai", openai_api_key="sk-test")
     llm = factory.build_llm(s)
     assert llm.__class__.__name__ == "OpenAIProvider"
+
+
+def test_factory_passes_base_url_to_openai_provider():
+    s = Settings(_env_file=None, llm="openai", openai_api_key="sk",
+                 openai_base_url="http://localhost:1234/v1")
+    llm = factory.build_llm(s)
+    assert str(llm.client.base_url).startswith("http://localhost:1234/v1")
 
 
 def test_build_vision_fake_returns_fake_vision():

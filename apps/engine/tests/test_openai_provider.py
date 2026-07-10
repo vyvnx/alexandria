@@ -1,6 +1,8 @@
 import json
 
-from engine.openai_provider import OpenAIProvider, extract_sys
+import pytest
+
+from engine.openai_provider import OpenAIProvider, extract_sys, parse_json_lenient
 from alexandria_core.providers.base import Extraction, TopicMatch
 
 
@@ -96,3 +98,75 @@ def test_extract_sys_frames_knowledge_map_at_every_level():
         assert "NEVER extract" in s
         # json contract still present
         assert '"concepts"' in s
+
+
+def test_extract_sys_injects_interest_context():
+    s = extract_sys("balanced", interests=["cloud architecture", "Victorian era"],
+                    avoid=["Patreon", "exam scoring"])
+    assert "cloud architecture" in s and "Victorian era" in s
+    assert "Patreon" in s and "exam scoring" in s
+    # empty context leaves the prompt exactly as before
+    assert extract_sys("balanced", interests=(), avoid=()) == extract_sys("balanced")
+    assert "Patreon" not in extract_sys("balanced")
+
+
+def test_extract_passes_interest_context_through(monkeypatch):
+    p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
+    seen = {}
+
+    def _capture(system, user):
+        seen["system"] = system
+        return {"entities": [], "concepts": []}
+
+    monkeypatch.setattr(p, "_chat_json", _capture)
+    p.extract("text", abstraction="abstract", interests=["aws"], avoid=["Patreon"])
+    assert seen["system"] == extract_sys("abstract", interests=["aws"], avoid=["Patreon"])
+
+
+def test_parse_json_lenient_handles_fences_and_prose():
+    assert parse_json_lenient('{"a": 1}') == {"a": 1}
+    assert parse_json_lenient('```json\n{"a": 1}\n```') == {"a": 1}
+    assert parse_json_lenient('Sure! Here it is:\n{"a": 1}\nHope that helps.') == {"a": 1}
+    # braces inside strings don't confuse the fallback scan
+    assert parse_json_lenient('noise {"a": "{b}"} noise') == {"a": "{b}"}
+    with pytest.raises(json.JSONDecodeError):
+        parse_json_lenient("no json here at all")
+
+
+def test_extract_retries_once_with_repair_note(monkeypatch):
+    p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
+    calls = []
+
+    def _flaky(system, user):
+        calls.append(user)
+        if len(calls) == 1:
+            raise json.JSONDecodeError("garbage", "x", 0)
+        return {"entities": [], "concepts": [{"name": "attention", "description": ""}]}
+
+    monkeypatch.setattr(p, "_chat_json", _flaky)
+    e = p.extract("text")
+    assert e.concepts[0].name == "attention"
+    assert len(calls) == 2 and "not valid JSON" in calls[1]
+
+
+def test_extract_returns_empty_after_two_failures(monkeypatch):
+    p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
+    monkeypatch.setattr(p, "_chat_json", lambda s, u: {"entities": "not-a-list"})
+    e = p.extract("text")
+    assert e.entities == [] and e.concepts == []
+
+
+def test_extract_parses_fenced_json_end_to_end():
+    # a small model wrapping valid JSON in a code fence still extracts
+    payload = "```json\n" + json.dumps({
+        "entities": [{"name": "Vaswani", "type": "person", "description": "author"}],
+        "concepts": [],
+    }) + "\n```"
+    p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
+    p.client = _FakeClient(payload)
+    assert p.extract("text").entities[0].name == "Vaswani"
+
+
+def test_base_url_reaches_openai_client():
+    p = OpenAIProvider(api_key="sk", model="qwen2.5:7b", base_url="http://localhost:8080/v1")
+    assert str(p.client.base_url).startswith("http://localhost:8080/v1")

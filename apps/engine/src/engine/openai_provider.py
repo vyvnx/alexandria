@@ -1,10 +1,58 @@
 import base64
 import json
+from collections.abc import Sequence
 
 from pydantic import BaseModel, ValidationError
 
+from alexandria_core.logging_config import get_logger
 from alexandria_core.providers.base import Extraction, ExtractedNode, Relation, TopicMatch
 from alexandria_core.graph.models import TYPED_EDGES
+
+log = get_logger("llm")
+
+
+def parse_json_lenient(raw: str) -> dict:
+    """Parse model output as JSON, tolerating the ways small models wrap it:
+    markdown code fences, surrounding prose, trailing text. Falls back to the
+    first parseable {...} object anywhere in the string."""
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            return obj
+    except json.JSONDecodeError:
+        pass
+    decoder = json.JSONDecoder()
+    idx = raw.find("{")
+    while idx != -1:
+        try:
+            obj, _ = decoder.raw_decode(raw, idx)
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+        idx = raw.find("{", idx + 1)
+    raise json.JSONDecodeError("no JSON object in model output", raw, 0)
+
+
+_REPAIR_NOTE = ("\n\nYour previous reply was not valid JSON for the requested schema. "
+                "Reply again with ONLY the JSON object — no prose, no code fences.")
+
+
+def chat_validated(chat_json, system: str, user: str, model_cls):
+    """One JSON chat round-trip validated against a pydantic model, with a single
+    repair retry when the output is malformed. Returns None if both attempts
+    fail — callers degrade to their empty result, loudly (warning log), never
+    silently."""
+    msg = user
+    for _ in range(2):
+        try:
+            return model_cls.model_validate(chat_json(system, msg))
+        except (ValidationError, json.JSONDecodeError, KeyError) as e:
+            err = e
+            msg = user + _REPAIR_NOTE
+    log.warning("%s: model output failed validation after retry: %s",
+                model_cls.__name__, err)
+    return None
 
 
 class _Ent(BaseModel):
@@ -72,10 +120,20 @@ _EXTRACT_SELECTIVITY = {
 }
 
 
-def extract_sys(abstraction: str) -> str:
-    """System prompt for the extractor at a given abstraction level."""
+def extract_sys(abstraction: str, *, interests: Sequence[str] = (),
+                avoid: Sequence[str] = ()) -> str:
+    """System prompt for the extractor at a given abstraction level, optionally
+    personalized: recurring topics as positive exemplars, dismissals as negative
+    few-shots. The prompt tunes itself from the reader's behavior."""
     lead = _EXTRACT_SELECTIVITY.get(abstraction, _EXTRACT_SELECTIVITY["balanced"])
-    return _EXTRACT_FRAME + lead + _EXTRACT_JSON
+    ctx = ""
+    if interests:
+        ctx += ("This reader's map already includes: " + ", ".join(interests)
+                + ". Reuse these exact names when the text covers the same topic.\n")
+    if avoid:
+        ctx += ("The reader dismissed these as not interesting — never extract "
+                "them or close variants: " + ", ".join(avoid) + ".\n")
+    return _EXTRACT_FRAME + ctx + lead + _EXTRACT_JSON
 _RELATE_SYS = (
     "Given a list of node names and the source text, return typed relations among them as JSON "
     '{"relations":[{"src_name","dst_name","type","evidence"}]}. '
@@ -97,9 +155,11 @@ _TOPIC_SYS = (
 
 
 class OpenAIProvider:
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, base_url: str | None = None):
         from openai import OpenAI
-        self.client = OpenAI(api_key=api_key)
+        # base_url points this provider at any OpenAI-compatible server
+        # (llama.cpp, vLLM, LM Studio, OpenRouter, ...); None ⇒ api.openai.com
+        self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
 
     def _chat_json(self, system: str, user: str) -> dict:
@@ -110,7 +170,7 @@ class OpenAIProvider:
             response_format={"type": "json_object"},
             temperature=0,
         )
-        return json.loads(resp.choices[0].message.content)
+        return parse_json_lenient(resp.choices[0].message.content)
 
     def summarize(self, text: str) -> str:
         resp = self.client.chat.completions.create(
@@ -121,10 +181,12 @@ class OpenAIProvider:
         )
         return resp.choices[0].message.content.strip()
 
-    def extract(self, text: str, *, abstraction: str = "balanced") -> Extraction:
-        try:
-            m = _ExtractionModel.model_validate(self._chat_json(extract_sys(abstraction), text))
-        except (ValidationError, json.JSONDecodeError):
+    def extract(self, text: str, *, abstraction: str = "balanced",
+                interests: Sequence[str] = (), avoid: Sequence[str] = ()) -> Extraction:
+        m = chat_validated(self._chat_json,
+                           extract_sys(abstraction, interests=interests, avoid=avoid),
+                           text, _ExtractionModel)
+        if m is None:
             return Extraction()
         ents = [ExtractedNode(e.name, "entity", e.description, e.type) for e in m.entities]
         cons = [ExtractedNode(c.name, "concept", c.description, None) for c in m.concepts]
@@ -132,9 +194,8 @@ class OpenAIProvider:
 
     def relate(self, names: list[str], text: str) -> list[Relation]:
         prompt = f"NAMES: {names}\n\nTEXT:\n{text}"
-        try:
-            m = _RelationsModel.model_validate(self._chat_json(_RELATE_SYS, prompt))
-        except (ValidationError, json.JSONDecodeError):
+        m = chat_validated(self._chat_json, _RELATE_SYS, prompt, _RelationsModel)
+        if m is None:
             return []
         allowed = set(names)
         return [Relation(r.src_name, r.dst_name, r.type, r.evidence) for r in m.relations
@@ -142,9 +203,8 @@ class OpenAIProvider:
 
     def same_topic(self, label_a: str, label_b: str) -> TopicMatch:
         prompt = f'Label A: "{label_a}"\nLabel B: "{label_b}"'
-        try:
-            m = _TopicModel.model_validate(self._chat_json(_TOPIC_SYS, prompt))
-        except (ValidationError, json.JSONDecodeError):
+        m = chat_validated(self._chat_json, _TOPIC_SYS, prompt, _TopicModel)
+        if m is None:
             return TopicMatch(same_topic=False, reason="parse-error")
         return TopicMatch(m.same_topic, m.canonical_topic, m.reason)
 

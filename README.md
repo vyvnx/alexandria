@@ -12,7 +12,7 @@ monorepo: turborepo, uv workspace (python), pnpm workspaces (js)
 
 - core (python): pydantic, sqlite + sqlite-vec, trafilatura, rapidfuzz
 - api (python): fastapi, uvicorn
-- engine (python): qwen3 embeddings (sentence-transformers), openai / ollama providers
+- engine (python): qwen3 embeddings (sentence-transformers), openai-compatible provider (works with any local server, e.g. llama.cpp)
 - web (typescript): vite, react, sigma.js, graphology, tailwind
 
 ## run
@@ -64,5 +64,4 @@ Opt in per source with `visual=true`. It needs the headless browser extra:
     uv sync --extra visual
     playwright install chromium
 
-Vision uses the same provider as `ALEX_LLM` (openai/ollama), with
-`ALEX_OPENAI_VISION_MODEL` / `ALEX_OLLAMA_VISION_MODEL`.
+Vision uses the same provider as `ALEX_LLM`, with `ALEX_OPENAI_VISION_MODEL`.

@@ -51,23 +51,39 @@ def _cosine(a: Vector, b: Vector) -> float:
 
 
 def drop_dismissed(store: GraphStore, extracted: list[ExtractedNode], vectors: list[Vector],
-                   settings: Settings) -> tuple[list[ExtractedNode], list[Vector]]:
+                   settings: Settings,
+                   positives: list[tuple[str, float, Vector | None]] | None = None,
+                   ) -> tuple[list[ExtractedNode], list[Vector]]:
     """Suppress topics the user dismissed as "not interested": drop any extracted
     node matching a dismissed record by canonical name, or by embedding cosine
-    >= merge_threshold (the resolver's "same node" question)."""
+    >= merge_threshold — unless it sits even closer to a behaviorally-confirmed
+    interest (`positives`, from GraphStore.interest_pool), in which case it is
+    kept. Only proximity to the negative pool can suppress; distance from the
+    positive pool never does, so novel topics always pass through."""
     dismissed = store.all_dismissed()
     if not dismissed:
         return list(extracted), list(vectors)
     canon_dismissed = {canonical_name(name): name for name, _ in dismissed}
+    pos_vecs = [(name, pvec) for name, _w, pvec in (positives or []) if pvec is not None]
     kept_nodes: list[ExtractedNode] = []
     kept_vecs: list[Vector] = []
     for node, vec in zip(extracted, vectors):
+        # an exact canonical-name match is a hard drop — the user named it.
         match = canon_dismissed.get(canonical_name(node.name))
         if match is None:
-            for name, dvec in dismissed:
-                if dvec is not None and _cosine(vec, dvec) >= settings.merge_threshold:
-                    match = name
-                    break
+            neg_cos, neg_name = max(
+                ((_cosine(vec, dvec), name) for name, dvec in dismissed if dvec is not None),
+                key=lambda t: t[0], default=(0.0, None))
+            if neg_cos >= settings.merge_threshold:
+                # knn score: recurring behaviour outvotes a nearby dismissal.
+                pos_cos, pos_name = max(
+                    ((_cosine(vec, pvec), name) for name, pvec in pos_vecs),
+                    key=lambda t: t[0], default=(0.0, None))
+                if pos_cos > neg_cos:
+                    log.info("kept %r: interest %r (%.3f) outscores dismissed %r (%.3f)",
+                             node.name, pos_name, pos_cos, neg_name, neg_cos)
+                else:
+                    match = neg_name
         if match is not None:
             log.info("suppressed dismissed topic: %r (matches %r)", node.name, match)
             continue

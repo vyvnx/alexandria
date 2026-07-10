@@ -19,16 +19,16 @@ class Settings(BaseSettings):
         env_prefix="ALEX_", env_file=_ENV_FILE, extra="ignore"
     )
 
-    llm: Literal["openai", "ollama", "fake"] = "openai"
+    llm: Literal["openai", "fake"] = "openai"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
-    ollama_host: str = "http://localhost:11434"
-    ollama_model: str = "llama3.1"
+    # any OpenAI-compatible server (llama.cpp, vLLM, LM Studio, OpenRouter, ...);
+    # empty ⇒ api.openai.com
+    openai_base_url: str = ""
 
     # visual enrichment (opt-in): screenshot + VLM read of the tables/charts/
     # figures trafilatura drops. see docs/superpowers/specs/2026-07-02-pixelrag-*.
     openai_vision_model: str = "gpt-4o-mini"
-    ollama_vision_model: str = "llava"
     screenshot_viewport_width: int = 1280
     screenshot_timeout_ms: int = 15000
     screenshot_max_segments: int = 4      # cap tall-page slices -> bounds VLM cost
@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     merge_threshold: float = 0.86         # cosine >= this ⇒ same node (auto-merge)
     ambiguous_threshold: float = 0.72     # band [ambiguous, merge) ⇒ ask the LLM
     fuzzy_ratio: int = 90                 # rapidfuzz token_set_ratio cutoff to propose a candidate
+
+    # Self-tuning interest loop — the positive pool is behavioral: a topic that
+    # recurs across sources is a confirmed interest. Each source's contribution
+    # decays with age so the map follows interest drift instead of anchoring.
+    interest_half_life_days: float = 90.0  # a source's vote halves every N days
+    interest_min_weight: float = 1.5       # decayed source-count to confirm (~2 recent sources)
+    interest_prompt_top_n: int = 20        # exemplars injected into the extract prompt
 
     # Extraction abstraction dial — how much each source pulls into the graph.
     # The prompt steers selectivity and a per-source salience cap enforces a

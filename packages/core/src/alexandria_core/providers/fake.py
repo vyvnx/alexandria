@@ -23,7 +23,8 @@ class FakeLLM:
         t = text.strip()
         return (t[:120] + "…") if len(t) > 120 else t
 
-    def extract(self, text: str, *, abstraction: str = "balanced") -> Extraction:
+    def extract(self, text: str, *, abstraction: str = "balanced",
+                interests=(), avoid=()) -> Extraction:
         caps = list(dict.fromkeys(_CAP.findall(text)))
         entities = [ExtractedNode(name=w, kind="entity", type="thing",
                                   description=f"entity {w}") for w in caps[:5]]

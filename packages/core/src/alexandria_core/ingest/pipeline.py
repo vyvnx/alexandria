@@ -42,16 +42,12 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     log.info("ingest start: url=%s note=%s abstraction=%s",
              url or "-", "yes" if note else "no", level)
 
-    # 1. Load
     if url:
         report("loading")
     doc = load_url(url, fetch=fetch) if url else None
     title = (doc.title if doc and doc.title else None) or (url or "Note")
     article = doc.text if doc else ""
 
-    # 1b. visual enrichment (opt-in): screenshot the page and let a vlm read the
-    #     tables/charts/figures trafilatura drops. best-effort — any failure
-    #     degrades to a text-only ingest.
     vlm_text = ""
     if visual and url and vision is not None:
         try:
@@ -61,7 +57,6 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
         except Exception:
             log.warning("visual enrichment failed for %s — skipping", url)
 
-    # 2. Assemble (keep article vs. my-take distinguishable)
     parts = []
     if article:
         parts.append("ARTICLE:\n" + article)
@@ -71,14 +66,18 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
         parts.append("VISUAL CONTENT:\n" + vlm_text)
     combined = "\n\n".join(parts) or title
 
-    # 3. Summarize
     report("summarizing")
     summary = llm.summarize(combined)
     log.debug("summarized (%d chars in, %d chars out)", len(combined), len(summary))
 
-    # 4. Extract (the abstraction level steers how selective the extractor is)
     report("extracting")
-    extraction = llm.extract(combined, abstraction=level)
+    interests = store.interest_pool(half_life_days=settings.interest_half_life_days,
+                                    min_weight=settings.interest_min_weight)
+    dismissed_names = [name for name, _ in store.all_dismissed()]
+    top_n = settings.interest_prompt_top_n
+    extraction = llm.extract(combined, abstraction=level,
+                             interests=[name for name, _, _ in interests[:top_n]],
+                             avoid=dismissed_names[-top_n:])
     entities = list(extraction.entities)
     concepts = list(extraction.concepts)
     log.info("extracted %d entities, %d concepts from %r",
@@ -97,8 +96,9 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
 
     # 5b. suppress dismissed topics — user said "not interested", permanently.
     #     runs before the salience cap so suppressed entities don't eat cap slots.
-    entities, ent_vecs = drop_dismissed(store, entities, ent_vecs, settings)
-    concepts, con_vecs = drop_dismissed(store, concepts, con_vecs, settings)
+    #     confirmed interests can rescue a near-dismissed vector (knn score).
+    entities, ent_vecs = drop_dismissed(store, entities, ent_vecs, settings, positives=interests)
+    concepts, con_vecs = drop_dismissed(store, concepts, con_vecs, settings, positives=interests)
 
     # 5a. Abstraction cap — keep only the most salient entities for this level.
     #     Concepts are left uncapped; the dial throttles the entity flood.

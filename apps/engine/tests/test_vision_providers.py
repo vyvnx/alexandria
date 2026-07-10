@@ -1,7 +1,6 @@
 import base64
 
 from engine.openai_provider import OpenAIProvider
-from engine.ollama_provider import OllamaProvider
 
 
 class _FakeResp:
@@ -25,18 +24,3 @@ def test_openai_describe_image_sends_image_and_prompt():
     assert content[0] == {"type": "text", "text": "read this"}
     assert content[1]["type"] == "image_url"
     assert base64.b64encode(b"PNG").decode() in content[1]["image_url"]["url"]
-
-
-def test_ollama_describe_image_passes_images(monkeypatch):
-    seen = {}
-
-    def _chat(**kw):
-        seen.update(kw)
-        return {"message": {"content": "  described  "}}
-
-    p = OllamaProvider(host="http://x", model="llava")
-    monkeypatch.setattr(p, "client", type("C", (), {"chat": staticmethod(_chat)})())
-    out = p.describe_image([b"PNG"], "read this")
-    assert out == "described"
-    assert seen["messages"][0]["images"] == [b"PNG"]
-    assert seen["messages"][0]["content"] == "read this"

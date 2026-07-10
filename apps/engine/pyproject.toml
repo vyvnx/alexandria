@@ -1,12 +1,11 @@
 [project]
 name = "alexandria-engine"
 version = "0.1.0"
-description = "Alexandria GPU/ML engine: Qwen3 embeddings + OpenAI/Ollama LLM providers"
+description = "Alexandria GPU/ML engine: Qwen3 embeddings + OpenAI-compatible LLM provider"
 requires-python = ">=3.11"
 dependencies = [
   "alexandria-core",
   "openai>=1.40",
-  "ollama>=0.3",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
 ]

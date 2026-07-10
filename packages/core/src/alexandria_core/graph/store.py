@@ -162,6 +162,33 @@ class GraphStore:
         ).fetchall()
         return [(r["node_id"], 1.0 - r["distance"]) for r in rows]  # cosine distance → score
 
+    def interest_pool(self, *, half_life_days: float, min_weight: float,
+                      ) -> list[tuple[str, float, list[float] | None]]:
+        """Behaviorally-confirmed interests: entity/concept nodes referenced by
+        mentions/about edges from distinct sources, each source's contribution
+        exponentially decayed by ingest age. Returns (name, weight, embedding)
+        sorted by weight descending, only nodes with weight >= min_weight."""
+        now = datetime.now(timezone.utc)
+        rows = self.conn.execute(
+            "SELECT e.dst_id AS node_id, s.ingested_at AS ingested_at "
+            "FROM edges e JOIN sources s ON s.node_id = e.src_id "
+            "WHERE e.type IN ('mentions','about') "
+            "GROUP BY e.dst_id, e.src_id",  # one vote per (source, node) pair
+        ).fetchall()
+        weights: dict[int, float] = {}
+        for r in rows:
+            age_days = (now - datetime.fromisoformat(r["ingested_at"])).total_seconds() / 86400
+            weights[r["node_id"]] = weights.get(r["node_id"], 0.0) + 0.5 ** (age_days / half_life_days)
+        out = []
+        for node_id, w in weights.items():
+            if w < min_weight:
+                continue
+            node = self.get_node(node_id)
+            if node is not None:
+                out.append((node.name, w, self.get_embedding(node_id)))
+        out.sort(key=lambda t: t[1], reverse=True)
+        return out
+
     # ---- dismissed (the "not interested" feedback loop) ----
     def dismiss_node(self, node_id: int) -> str:
         """Delete a node and remember it so future ingests suppress the topic.

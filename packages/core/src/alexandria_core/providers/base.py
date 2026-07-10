@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol, Literal
 
@@ -36,7 +37,10 @@ class TopicMatch:
 
 class LLMProvider(Protocol):
     def summarize(self, text: str) -> str: ...
-    def extract(self, text: str, *, abstraction: str = "balanced") -> Extraction: ...
+    # interests/avoid personalize the prompt: recurring topics as positive
+    # exemplars, dismissed names as negative ones. Both optional.
+    def extract(self, text: str, *, abstraction: str = "balanced",
+                interests: Sequence[str] = (), avoid: Sequence[str] = ()) -> Extraction: ...
     def relate(self, names: list[str], text: str) -> list[Relation]: ...
     # Gray-zone resolver adjudicator: are two labels the same topic? (low-temp, JSON).
     def same_topic(self, label_a: str, label_b: str) -> TopicMatch: ...

@@ -22,7 +22,7 @@ class _ManyLLM:
     def summarize(self, text):
         return text[:40]
 
-    def extract(self, text, *, abstraction="balanced"):
+    def extract(self, text, *, abstraction="balanced", interests=(), avoid=()):
         ents = [ExtractedNode(f"Fighter{i}", "entity", f"fighter {i}", "person")
                 for i in range(self.n_entities)]
         cons = [ExtractedNode(f"idea{i}", "concept", f"idea {i}")
@@ -149,6 +149,32 @@ def test_visual_degrades_when_render_raises():
                  url="http://x", note="A note about Newton.", fetch=lambda u: None,
                  visual=True, vision=FakeVision(), render_fn=boom)
     assert res.source_id > 0  # ingest still succeeded despite the render failure
+    store.close()
+
+
+def test_extract_receives_interest_context():
+    from alexandria_core.providers.fake import FakeLLM
+
+    class _RecordingLLM(FakeLLM):
+        def extract(self, text, *, abstraction="balanced", interests=(), avoid=()):
+            self.seen_interests, self.seen_avoid = list(interests), list(avoid)
+            return super().extract(text, abstraction=abstraction)
+
+    store = GraphStore(":memory:")
+    store.init_schema()
+    settings = Settings(_env_file=None, llm="fake")
+    llm = _RecordingLLM()
+    # the same note twice -> its concepts recur across two sources (confirmed interests)
+    for _ in range(2):
+        ingest(store, llm, FakeEmbedder(), settings,
+               note="spaced repetition works", fetch=lambda u: None)
+    nid = store.add_node(KIND_CONCEPT, "Patreon")
+    store.dismiss_node(nid)
+
+    ingest(store, llm, FakeEmbedder(), settings,
+           note="victorian era history", fetch=lambda u: None)
+    assert "repetition" in llm.seen_interests   # recurring concept fed back as exemplar
+    assert llm.seen_avoid == ["Patreon"]        # dismissal fed back as negative few-shot
     store.close()
 
 

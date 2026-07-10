@@ -13,14 +13,11 @@ def build_llm(settings: Settings) -> LLMProvider:
     if settings.llm == "openai":
         if not settings.openai_api_key:
             log.warning("ALEX_LLM=openai but no API key set — calls will fail")
-        log.info("LLM provider: openai (model=%s)", settings.openai_model)
+        log.info("LLM provider: openai (model=%s, base_url=%s)",
+                 settings.openai_model, settings.openai_base_url or "default")
         from .openai_provider import OpenAIProvider
-        return OpenAIProvider(api_key=settings.openai_api_key, model=settings.openai_model)
-    if settings.llm == "ollama":
-        log.info("LLM provider: ollama (host=%s, model=%s)",
-                 settings.ollama_host, settings.ollama_model)
-        from .ollama_provider import OllamaProvider
-        return OllamaProvider(host=settings.ollama_host, model=settings.ollama_model)
+        return OpenAIProvider(api_key=settings.openai_api_key, model=settings.openai_model,
+                              base_url=settings.openai_base_url or None)
     raise ValueError(f"unknown llm provider: {settings.llm}")
 
 
@@ -45,11 +42,6 @@ def build_vision(settings: Settings) -> VisionProvider:
         log.info("vision provider: openai (model=%s)", settings.openai_vision_model)
         from .openai_provider import OpenAIProvider
         return OpenAIProvider(api_key=settings.openai_api_key,
-                              model=settings.openai_vision_model)
-    if settings.llm == "ollama":
-        log.info("vision provider: ollama (host=%s, model=%s)",
-                 settings.ollama_host, settings.ollama_vision_model)
-        from .ollama_provider import OllamaProvider
-        return OllamaProvider(host=settings.ollama_host,
-                              model=settings.ollama_vision_model)
+                              model=settings.openai_vision_model,
+                              base_url=settings.openai_base_url or None)
     raise ValueError(f"unknown llm provider: {settings.llm}")

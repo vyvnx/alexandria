@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from alexandria_core.graph.store import GraphStore
@@ -111,3 +113,36 @@ def test_dismiss_unknown_node_rejected(store):
 
 def test_all_dismissed_empty_by_default(store):
     assert store.all_dismissed() == []
+
+
+def _source_about(store, node_ids, ingested_at=None):
+    """Add a source node with an about edge to each given node; optionally backdate it."""
+    sid = store.add_node(KIND_SOURCE, "src")
+    store.add_source(sid, url=None, author=None, published_at=None,
+                     raw_text="", my_note=None, summary="")
+    for nid in node_ids:
+        store.add_edge(sid, nid, "about", from_source_id=sid)
+    if ingested_at is not None:
+        store.conn.execute("UPDATE sources SET ingested_at=? WHERE node_id=?",
+                           (ingested_at, sid))
+    return sid
+
+
+def test_interest_pool_requires_recurrence(store):
+    a = store.add_node(KIND_CONCEPT, "cloud design")
+    b = store.add_node(KIND_CONCEPT, "one-off")
+    _source_about(store, [a, b])
+    _source_about(store, [a])
+    pool = store.interest_pool(half_life_days=90, min_weight=1.5)
+    # only the concept seen across two sources qualifies, weight ~= 2 fresh votes
+    assert [name for name, _, _ in pool] == ["cloud design"]
+    assert pool[0][1] == pytest.approx(2.0, abs=0.01)
+
+
+def test_interest_pool_decays_old_sources(store):
+    a = store.add_node(KIND_CONCEPT, "aws")
+    old = (datetime.now(timezone.utc) - timedelta(days=180)).isoformat()
+    _source_about(store, [a], ingested_at=old)
+    _source_about(store, [a], ingested_at=old)
+    # two sources, but both two half-lives stale -> weight ~= 0.5, interest has drifted away
+    assert store.interest_pool(half_life_days=90, min_weight=1.5) == []

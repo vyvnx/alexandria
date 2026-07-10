@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from alexandria_core.config import Settings
@@ -75,4 +77,64 @@ def test_dissimilar_topic_survives(store):
     nodes = [ExtractedNode("Victorian era", "concept")]
     vecs = emb.embed(["Victorian era"], kind="document")
     kept, _ = drop_dismissed(store, nodes, vecs, _settings())
+    assert [n.name for n in kept] == ["Victorian era"]
+
+
+def _vec(x, y, z=0.0):
+    """1024-dim unit vector spanned by the first three axes — hand-set cosines."""
+    v = [0.0] * 1024
+    n = math.sqrt(x * x + y * y + z * z)
+    v[0], v[1], v[2] = x / n, y / n, z / n
+    return v
+
+
+# geometry shared by the knn-scorer tests: extracted C sits above merge_threshold
+# from dismissed A (cos 0.908) but even closer to interest B (cos 0.978).
+_A, _B, _C = _vec(1, 0), _vec(0.8, 0.6), _vec(2.6, 1.2)
+
+
+def test_interest_rescues_near_dismissed_topic(store):
+    if not store.vec_available:
+        pytest.skip("sqlite-vec required to snapshot embeddings")
+    _dismiss(store, "exam scoring", _A)
+    nodes = [ExtractedNode("cloud certification design", "concept")]
+    kept, _ = drop_dismissed(store, nodes, [_C], _settings(),
+                             positives=[("cloud solution design", 2.0, _B)])
+    assert [n.name for n in kept] == ["cloud certification design"]
+
+
+def test_near_dismissed_without_closer_interest_drops(store):
+    if not store.vec_available:
+        pytest.skip("sqlite-vec required to snapshot embeddings")
+    _dismiss(store, "exam scoring", _A)
+    nodes = [ExtractedNode("exam registration", "concept")]
+    # no positives at all -> suppressed
+    kept, _ = drop_dismissed(store, nodes, [_C], _settings())
+    assert kept == []
+    # a positive exists but is farther than the dismissal -> still suppressed
+    kept, _ = drop_dismissed(store, nodes, [_C], _settings(),
+                             positives=[("Victorian era", 3.0, _vec(0, 1))])
+    assert kept == []
+
+
+def test_exact_name_dismissal_is_never_rescued(store):
+    if not store.vec_available:
+        pytest.skip("sqlite-vec required to snapshot embeddings")
+    _dismiss(store, "Patreon", _A)
+    # identical vector to a heavy interest, but the user dismissed this exact name
+    nodes = [ExtractedNode("Patreon", "concept")]
+    kept, _ = drop_dismissed(store, nodes, [_B], _settings(),
+                             positives=[("membership economics", 5.0, _B)])
+    assert kept == []
+
+
+def test_novel_topic_passes_with_both_pools_present(store):
+    # the guardrail: far from the negative pool -> pass, no matter how far
+    # from the positive pool. novelty is never suppressed.
+    if not store.vec_available:
+        pytest.skip("sqlite-vec required to snapshot embeddings")
+    _dismiss(store, "exam scoring", _A)
+    nodes = [ExtractedNode("Victorian era", "concept")]
+    kept, _ = drop_dismissed(store, nodes, [_vec(0, 0, 1)], _settings(),
+                             positives=[("cloud solution design", 2.0, _B)])
     assert [n.name for n in kept] == ["Victorian era"]
