@@ -9,6 +9,7 @@ dependencies = [
   "trafilatura>=1.12",
   "sqlite-vec>=0.1.6",
   "rapidfuzz>=3.9",
+  "pymupdf>=1.28.0",
 ]
 
 [project.optional-dependencies]

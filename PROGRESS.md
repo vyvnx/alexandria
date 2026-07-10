@@ -48,7 +48,7 @@ Deferred from H1: F5 (no bulk op to gate), A2b PDF/OCR loader (own plan later), 
 - [x] Task 5 — D3: GraphRAG — `ask.py` (knn seeds + k-hop expansion → numbered passages, name-match fallback, empty graph short-circuits without llm) + `GET /ask?q=`
 - [x] Task 6 — D4: digest — `digest.py` (window counts, pagerank newcomers, trending, resurface-untouched, contradiction count) + `GET /digest?days&narrative` (narrative = opt-in llm call)
 - [x] Task 7 — web: `#/insights` page — ask box with citation chips, six insight sections, opt-in digest narrative; StatusBar link (browser check in task 9)
-- [ ] Task 8 — A2b: digital-PDF loader + upload ingest
+- [x] Task 8 — A2b: digital-PDF ingestion — `load_pdf` (pymupdf text layer), pipeline accepts preloaded docs, `POST /ingest/file` stores uploads content-addressed under `data/uploads/`; scanned pdfs fail with an actionable ocr message (tesseract = user install, still deferred)
 - [ ] Task 9 — end-to-end verification
 
 Out of H2 scope (stated triggers/limits): OCR for scanned PDFs (needs the tesseract system binary — user install), Rust→WASM algo core (renderer seam, E-track), H3 storage rungs (measured ceilings only), F5 (no bulk op to gate).

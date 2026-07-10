@@ -14,6 +14,30 @@ class LoadedDoc:
     text: str
 
 
+def load_pdf(data: bytes, *, filename: str = "") -> LoadedDoc:
+    """Digital-pdf loader (roadmap A2b): the text layer, page-joined, into the
+    same LoadedDoc every other loader emits — the pipeline never knows the
+    difference. Scanned pdfs (no text layer) come back empty; ocr is a
+    deliberate non-feature until tesseract is installed."""
+    import fitz
+
+    try:
+        pdf = fitz.open(stream=data, filetype="pdf")
+    except Exception:
+        log.warning("unreadable pdf %r — not a pdf or corrupt", filename or "(upload)")
+        return LoadedDoc(url=None, title=filename or None, author=None,
+                         published_at=None, text="")
+    try:
+        text = "\n\n".join(page.get_text().strip() for page in pdf).strip()
+        meta = pdf.metadata or {}
+    finally:
+        pdf.close()
+    title = filename or meta.get("title") or None
+    log.info("pdf %r: %d chars of text layer", title or "(untitled)", len(text))
+    return LoadedDoc(url=None, title=title, author=meta.get("author") or None,
+                     published_at=None, text=text)
+
+
 def load_url(url: str, *, fetch=None) -> LoadedDoc:
     import trafilatura
 

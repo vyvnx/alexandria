@@ -12,13 +12,14 @@ from alexandria_core.graph.models import KIND_CONCEPT
 
 
 @pytest.fixture
-def client():
+def client(tmp_path):
     store = GraphStore(":memory:")
     store.init_schema()
     app = create_app(store=store, llm=FakeLLM(), embedder=FakeEmbedder(),
                      registry=IntakeRegistry(":memory:"),
                      settings=Settings(_env_file=None, llm="fake",
-                                       executions_db_path=":memory:"))
+                                       executions_db_path=":memory:",
+                                       upload_dir=str(tmp_path)))
     # context manager so the lifespan runs — it starts the ingest worker thread
     with TestClient(app) as c:
         yield c, store
@@ -414,6 +415,39 @@ def test_topics_crud(client):
     assert c.delete(f"/topics/{tid}").status_code == 200
     assert c.get("/topics").json() == []
     assert c.delete("/topics/999").status_code == 404
+
+
+def _pdf_bytes(text="Spaced repetition beats cramming, according to Ebbinghaus."):
+    import fitz
+    doc = fitz.open()
+    doc.new_page().insert_text((72, 72), text)
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+def test_pdf_upload_flows_through_the_queue(client):
+    c, store = client
+    pdf = _pdf_bytes()
+    r = c.post("/ingest/file", files={"file": ("notes.pdf", pdf, "application/pdf")})
+    assert r.status_code == 200
+    job = _wait(c, r.json()["job_id"])
+    assert job["status"] == "done", job
+    assert job["result"]["title"] == "notes.pdf"
+    assert store.get_source(job["result"]["source_id"])["raw_text"].startswith("Spaced")
+    # the same bytes again dedup — no second source, no llm spend
+    r2 = c.post("/ingest/file", files={"file": ("again.pdf", pdf, "application/pdf")})
+    job2 = _wait(c, r2.json()["job_id"])
+    assert job2["result"]["deduped"] is True
+    assert job2["result"]["source_id"] == job["result"]["source_id"]
+
+
+def test_textless_pdf_fails_with_actionable_error(client):
+    c, _ = client
+    r = c.post("/ingest/file", files={"file": ("scan.pdf", b"not a pdf", "application/pdf")})
+    job = _wait(c, r.json()["job_id"])
+    assert job["status"] == "failed"
+    assert "ocr" in job["error"].lower()
 
 
 def test_dismiss_node(client):
