@@ -7,6 +7,7 @@ from pydantic import BaseModel, ValidationError
 from alexandria_core.logging_config import get_logger
 from alexandria_core.providers.base import Extraction, ExtractedNode, Relation, TopicMatch
 from alexandria_core.graph.models import TYPED_EDGES
+from alexandria_core.telemetry import add_usage
 
 log = get_logger("llm")
 
@@ -162,22 +163,29 @@ class OpenAIProvider:
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
 
-    def _chat_json(self, system: str, user: str) -> dict:
+    def _create(self, **kwargs):
+        # single funnel for every chat round-trip so token usage is reported
+        # to the telemetry seam (F1) exactly once per api call
         resp = self.client.chat.completions.create(
-            model=self.model,
+            model=self.model, temperature=0, **kwargs)
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            add_usage(getattr(usage, "prompt_tokens", 0) or 0,
+                      getattr(usage, "completion_tokens", 0) or 0, self.model)
+        return resp
+
+    def _chat_json(self, system: str, user: str) -> dict:
+        resp = self._create(
             messages=[{"role": "system", "content": system},
                       {"role": "user", "content": user}],
             response_format={"type": "json_object"},
-            temperature=0,
         )
         return parse_json_lenient(resp.choices[0].message.content)
 
     def summarize(self, text: str) -> str:
-        resp = self.client.chat.completions.create(
-            model=self.model,
+        resp = self._create(
             messages=[{"role": "system", "content": "Summarize in 2-3 sentences."},
                       {"role": "user", "content": text}],
-            temperature=0,
         )
         return resp.choices[0].message.content.strip()
 
@@ -214,9 +222,5 @@ class OpenAIProvider:
             b64 = base64.b64encode(img).decode()
             content.append({"type": "image_url",
                             "image_url": {"url": f"data:image/png;base64,{b64}"}})
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": content}],
-            temperature=0,
-        )
+        resp = self._create(messages=[{"role": "user", "content": content}])
         return resp.choices[0].message.content.strip()

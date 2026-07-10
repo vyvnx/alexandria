@@ -7,13 +7,16 @@ from alexandria_core.providers.base import Extraction, TopicMatch
 
 
 class _FakeResp:
-    def __init__(self, content):
+    def __init__(self, content, usage=None):
         self.choices = [type("C", (), {"message": type("M", (), {"content": content})})]
+        if usage is not None:
+            self.usage = usage
 
 
 class _FakeClient:
-    def __init__(self, content):
+    def __init__(self, content, usage=None):
         self._content = content
+        self._usage = usage
 
     @property
     def chat(self):
@@ -21,7 +24,7 @@ class _FakeClient:
 
         class _Comp:
             def create(self, **kw):
-                return _FakeResp(client._content)
+                return _FakeResp(client._content, client._usage)
 
         return type("Chat", (), {"completions": _Comp()})()
 
@@ -165,6 +168,28 @@ def test_extract_parses_fenced_json_end_to_end():
     p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
     p.client = _FakeClient(payload)
     assert p.extract("text").entities[0].name == "Vaswani"
+
+
+def test_usage_reported_to_telemetry():
+    from alexandria_core.telemetry import MeteredLLM, TelemetryStore
+    p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
+    usage = type("U", (), {"prompt_tokens": 7, "completion_tokens": 3})
+    p.client = _FakeClient("a summary", usage=usage)
+    store = TelemetryStore(":memory:")
+    assert MeteredLLM(p, store).summarize("text") == "a summary"
+    row = store.conn.execute("SELECT * FROM llm_call").fetchone()
+    assert (row["prompt_tokens"], row["completion_tokens"]) == (7, 3)
+    assert row["model"] == "gpt-4o-mini"
+
+
+def test_missing_usage_degrades_to_tokenless_record():
+    from alexandria_core.telemetry import MeteredLLM, TelemetryStore
+    p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
+    p.client = _FakeClient("a summary")  # no usage on the response
+    store = TelemetryStore(":memory:")
+    assert MeteredLLM(p, store).summarize("text") == "a summary"
+    row = store.conn.execute("SELECT prompt_tokens FROM llm_call").fetchone()
+    assert row["prompt_tokens"] is None
 
 
 def test_base_url_reaches_openai_client():
