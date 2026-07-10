@@ -22,7 +22,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 
 ## H1 tasks
 
-- [ ] Task 1 — A5: dedup before the LLM (url + content hash)
+- [x] Task 1 — A5: dedup before the LLM — url gate before fetch (unless a new note arrives), sha256 content gate before summarize; `IngestResult.deduped`; lazy `content_hash` column migration
 - [ ] Task 2 — A3: intake registry (feeds + topics) + HTTP CRUD
 - [ ] Task 3 — A3: feed poller in the worker loop
 - [ ] Task 4 — A3b: topic-relevance gate

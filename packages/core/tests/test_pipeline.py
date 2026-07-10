@@ -11,6 +11,13 @@ HTML = """<html><head><title>Transformers Paper</title></head><body><article>
 <p>Transformers use attention. Vaswani introduced the architecture.</p>
 </article></body></html>"""
 
+# same topics as HTML with one extra sentence: overlapping nodes for the
+# resolver, but a different content hash so the dedup gate lets it through
+HTML_B = """<html><head><title>Transformers Paper</title></head><body><article>
+<p>Transformers use attention. Vaswani introduced the architecture.
+Attention scales with sequence length.</p>
+</article></body></html>"""
+
 
 class _ManyLLM:
     """Emits a fixed number of distinct entities + concepts, ignoring the text —
@@ -94,7 +101,7 @@ def test_ingest_reuses_existing_nodes(built):
     s = built
     ingest(s["store"], s["llm"], s["embedder"], s["settings"], url="http://a", note=None, fetch=lambda u: HTML)
     n_before = len(s["store"].all_nodes())
-    res2 = ingest(s["store"], s["llm"], s["embedder"], s["settings"], url="http://b", note=None, fetch=lambda u: HTML)
+    res2 = ingest(s["store"], s["llm"], s["embedder"], s["settings"], url="http://b", note=None, fetch=lambda u: HTML_B)
     # same content → most nodes reused, only the new source node is truly new
     assert res2.nodes_reused >= 1
     assert len(s["store"].all_nodes()) < n_before * 2
@@ -164,10 +171,11 @@ def test_extract_receives_interest_context():
     store.init_schema()
     settings = Settings(_env_file=None, llm="fake")
     llm = _RecordingLLM()
-    # the same note twice -> its concepts recur across two sources (confirmed interests)
-    for _ in range(2):
+    # the same concepts across two sources (confirmed interests) — distinct
+    # wording so the dedup gate (A5) doesn't collapse them into one source
+    for note in ("spaced repetition works", "spaced repetition truly works"):
         ingest(store, llm, FakeEmbedder(), settings,
-               note="spaced repetition works", fetch=lambda u: None)
+               note=note, fetch=lambda u: None)
     nid = store.add_node(KIND_CONCEPT, "Patreon")
     store.dismiss_node(nid)
 
@@ -192,3 +200,78 @@ def test_dismissed_topic_suppressed_on_ingest(built):
     names = [n.name for n in store.all_nodes()]
     assert "attention" not in names   # suppressed by the dismissal
     assert "powers" in names          # non-dismissed concepts still land
+
+
+class _SpyLLM:
+    """counts every llm call so dedup tests can assert zero spend on a re-ingest"""
+
+    def __init__(self):
+        self.calls = 0
+
+    def summarize(self, text):
+        self.calls += 1
+        return "a summary"
+
+    def extract(self, text, *, abstraction="balanced", interests=(), avoid=()):
+        self.calls += 1
+        return Extraction(concepts=[ExtractedNode("attention", "concept", "d")])
+
+    def relate(self, names, text):
+        self.calls += 1
+        return []
+
+    def same_topic(self, a, b):
+        self.calls += 1
+        return TopicMatch(same_topic=False)
+
+
+def test_reingesting_same_note_is_a_noop(built):
+    llm = _SpyLLM()
+    s = built
+    first = ingest(s["store"], llm, s["embedder"], s["settings"],
+                   note="same note twice", fetch=lambda u: None)
+    assert first.deduped is False
+    before = llm.calls
+    second = ingest(s["store"], llm, s["embedder"], s["settings"],
+                    note="same note twice", fetch=lambda u: None)
+    assert second.deduped is True
+    assert second.source_id == first.source_id
+    assert second.nodes_added == 0
+    assert llm.calls == before  # zero llm calls on the dedup path
+
+
+def test_reingesting_same_url_skips_before_fetch(built):
+    llm = _SpyLLM()
+    s = built
+    fetches = []
+
+    def fetch(u):
+        fetches.append(u)
+        return HTML
+
+    first = ingest(s["store"], llm, s["embedder"], s["settings"],
+                   url="https://x.com/a", fetch=fetch)
+    second = ingest(s["store"], llm, s["embedder"], s["settings"],
+                    url="https://x.com/a", fetch=fetch)
+    assert second.deduped is True and second.source_id == first.source_id
+    assert len(fetches) == 1  # the url gate fires before load_url
+
+
+def test_same_url_with_new_note_is_not_deduped(built):
+    llm = _SpyLLM()
+    s = built
+    ingest(s["store"], llm, s["embedder"], s["settings"],
+           url="https://x.com/a", fetch=lambda u: HTML)
+    second = ingest(s["store"], llm, s["embedder"], s["settings"],
+                    url="https://x.com/a", note="my new take", fetch=lambda u: HTML)
+    assert second.deduped is False  # the note changed the content
+
+
+def test_same_content_from_two_urls_is_deduped(built):
+    llm = _SpyLLM()
+    s = built
+    first = ingest(s["store"], llm, s["embedder"], s["settings"],
+                   url="https://x.com/a", fetch=lambda u: HTML)
+    second = ingest(s["store"], llm, s["embedder"], s["settings"],
+                    url="https://mirror.com/a", fetch=lambda u: HTML)
+    assert second.deduped is True and second.source_id == first.source_id

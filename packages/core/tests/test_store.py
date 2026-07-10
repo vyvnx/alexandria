@@ -146,3 +146,25 @@ def test_interest_pool_decays_old_sources(store):
     _source_about(store, [a], ingested_at=old)
     # two sources, but both two half-lives stale -> weight ~= 0.5, interest has drifted away
     assert store.interest_pool(half_life_days=90, min_weight=1.5) == []
+
+
+def test_source_content_hash_and_finders(store):
+    sid = store.add_node(KIND_SOURCE, "s")
+    store.add_source(sid, url="https://a.com/x", author=None, published_at=None,
+                     raw_text="t", my_note=None, summary="", content_hash="abc123")
+    assert store.find_source_by_url("https://a.com/x") == sid
+    assert store.find_source_by_hash("abc123") == sid
+    assert store.find_source_by_url("https://other") is None
+    assert store.find_source_by_hash("nope") is None
+
+
+def test_init_schema_migrates_pre_hash_sources_table():
+    s = GraphStore(":memory:")
+    # simulate a db created before the dedup column existed
+    s.conn.execute(
+        "CREATE TABLE sources (node_id INTEGER PRIMARY KEY, url TEXT, author TEXT,"
+        " published_at TEXT, raw_text TEXT, my_note TEXT, summary TEXT, ingested_at TEXT)")
+    s.init_schema()
+    cols = [r[1] for r in s.conn.execute("PRAGMA table_info(sources)")]
+    assert "content_hash" in cols
+    s.close()

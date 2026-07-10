@@ -1,3 +1,4 @@
+import hashlib
 from dataclasses import dataclass
 
 from ..config import Settings
@@ -31,6 +32,17 @@ class IngestResult:
     typed_edges_added: int
     similar_edges_added: int
     node_ids: list[int]
+    deduped: bool = False   # true ⇒ content was already ingested; no-op run (A5)
+
+
+def _dedup_result(store: GraphStore, source_id: int) -> IngestResult:
+    node = store.get_node(source_id)
+    src = store.get_source(source_id) or {}
+    log.info("dedup: already ingested as source %d — no-op", source_id)
+    return IngestResult(source_id=source_id, title=node.name if node else "",
+                        summary=src.get("summary") or "", nodes_added=0, nodes_reused=0,
+                        typed_edges_added=0, similar_edges_added=0,
+                        node_ids=[source_id], deduped=True)
 
 
 def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
@@ -41,6 +53,13 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     report = on_stage or (lambda _s: None)  # stage progress callback; no-op if unset
     log.info("ingest start: url=%s note=%s abstraction=%s",
              url or "-", "yes" if note else "no", level)
+
+    # dedup gate 1 (A5): a known url is a no-op before we even fetch — unless a
+    # note came with it (a new note changes the content; gate 2 decides then)
+    if url and not note:
+        existing = store.find_source_by_url(url)
+        if existing is not None:
+            return _dedup_result(store, existing)
 
     if url:
         report("loading")
@@ -65,6 +84,13 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     if vlm_text:
         parts.append("VISUAL CONTENT:\n" + vlm_text)
     combined = "\n\n".join(parts) or title
+
+    # dedup gate 2 (A5): identical content (e.g. the same article syndicated at
+    # another url) never reaches the llm twice
+    content_hash = hashlib.sha256(combined.encode()).hexdigest()
+    existing = store.find_source_by_hash(content_hash)
+    if existing is not None:
+        return _dedup_result(store, existing)
 
     report("summarizing")
     summary = llm.summarize(combined)
@@ -118,7 +144,8 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
     source_id = store.add_node(KIND_SOURCE, title, {"description": summary})
     store.add_source(source_id, url=url, author=(doc.author if doc else None),
                      published_at=(doc.published_at if doc else None),
-                     raw_text=article, my_note=note, summary=summary)
+                     raw_text=article, my_note=note, summary=summary,
+                     content_hash=content_hash)
     store.add_embedding(source_id, src_vec)
 
     # 6. Resolve extracted nodes against the store and within this batch.
