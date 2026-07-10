@@ -256,6 +256,17 @@ def test_jobs_survive_in_one_persistent_store(client):
     assert any(str(r["id"]) == job_id for r in c.get("/executions").json())
 
 
+def test_insights_after_ingests(client):
+    c, _ = client
+    _ingest(c, note="Attention mechanisms power transformers today.")
+    _ingest(c, note="Attention improves retrieval models notably.")
+    ins = c.get("/insights").json()
+    assert ins["stats"]["nodes"] > 0 and ins["stats"]["edges"] > 0
+    names = [i["name"] for i in ins["strongest_interests"]]
+    assert "Attention" in names  # recurs across both notes → high pagerank
+    assert ins["communities"]
+
+
 def test_usage_rollup_after_ingest(client):
     c, _ = client
     _ingest(c, note="Attention mechanisms power transformers.")
