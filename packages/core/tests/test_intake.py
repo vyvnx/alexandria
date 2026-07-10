@@ -174,3 +174,93 @@ def test_poll_ignores_feeds_not_due(world):
     n = poll_feeds(w["reg"], w["store"], w["embedder"], w["telemetry"], w["settings"],
                    discover=lambda u: ["https://a/p1"], load=_doc)
     assert n == 0
+
+
+# ── relevance gate ────────────────────────────────────────────────────────────
+
+from alexandria_core.graph.models import KIND_CONCEPT
+from alexandria_core.intake import topic_names
+
+
+class _KindlessEmbedder(FakeEmbedder):
+    """identical text ⇒ identical vector regardless of query/document kind,
+    so gate tests can steer cosine scores with exact strings"""
+
+    def embed(self, texts, *, kind):
+        return super().embed(texts, kind="document")
+
+
+def _gate_settings(threshold=0.99):
+    # threshold ≈ 1 ⇒ only text identical to a topic is admitted
+    return Settings(_env_file=None, llm="fake", relevance_threshold=threshold)
+
+
+def test_on_topic_item_is_enqueued_with_score(world):
+    w = world
+    fid = w["reg"].add_feed("https://a/rss")
+    w["reg"].add_topic("spaced repetition")
+    n = poll_feeds(w["reg"], w["store"], _KindlessEmbedder(dim=64), w["telemetry"],
+                   _gate_settings(),
+                   discover=lambda u: ["https://a/on"],
+                   load=lambda u: _doc(u, text="spaced repetition"))
+    assert n == 1
+    row = w["reg"].conn.execute("SELECT status, score FROM feed_item").fetchone()
+    assert row["status"] == "enqueued"
+    assert row["score"] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_off_topic_item_is_filtered_before_any_llm_cost(world):
+    w = world
+    w["reg"].add_feed("https://a/rss")
+    w["reg"].add_topic("spaced repetition")
+    n = poll_feeds(w["reg"], w["store"], _KindlessEmbedder(dim=64), w["telemetry"],
+                   _gate_settings(),
+                   discover=lambda u: ["https://a/off"],
+                   load=lambda u: _doc(u, text="celebrity gossip roundup"))
+    assert n == 0
+    assert _queued_urls(w["telemetry"]) == []
+    row = w["reg"].conn.execute("SELECT status, score FROM feed_item").fetchone()
+    assert row["status"] == "filtered"
+    assert row["score"] is not None and row["score"] < 0.99
+
+
+def test_no_topics_admits_everything(world):
+    w = world
+    w["reg"].add_feed("https://a/rss")
+    n = poll_feeds(w["reg"], w["store"], _KindlessEmbedder(dim=64), w["telemetry"],
+                   _gate_settings(),
+                   discover=lambda u: ["https://a/any"],
+                   load=lambda u: _doc(u, text="anything at all"))
+    assert n == 1
+
+
+def test_learned_topics_come_from_the_interest_pool(world):
+    w = world
+    # a concept recurring across two sources is a confirmed interest
+    concept = w["store"].add_node(KIND_CONCEPT, "spaced repetition")
+    for _ in range(2):
+        sid = w["store"].add_node("source", "s")
+        w["store"].add_source(sid, url=None, author=None, published_at=None,
+                              raw_text="", my_note=None, summary="")
+        w["store"].add_edge(sid, concept, "about", from_source_id=sid)
+    names = topic_names(w["reg"], w["store"], _gate_settings())
+    assert "spaced repetition" in names
+    # and the learned topic gates intake exactly like an explicit one
+    w["reg"].add_feed("https://a/rss")
+    n = poll_feeds(w["reg"], w["store"], _KindlessEmbedder(dim=64), w["telemetry"],
+                   _gate_settings(),
+                   discover=lambda u: ["https://a/on"],
+                   load=lambda u: _doc(u, text="spaced repetition"))
+    assert n == 1
+
+
+def test_explicit_topics_come_first_and_dedupe(world):
+    w = world
+    w["reg"].add_topic("aws")
+    concept = w["store"].add_node(KIND_CONCEPT, "aws")
+    for _ in range(2):
+        sid = w["store"].add_node("source", "s")
+        w["store"].add_source(sid, url=None, author=None, published_at=None,
+                              raw_text="", my_note=None, summary="")
+        w["store"].add_edge(sid, concept, "about", from_source_id=sid)
+    assert topic_names(w["reg"], w["store"], _gate_settings()) == ["aws"]

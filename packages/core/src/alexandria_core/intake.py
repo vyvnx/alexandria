@@ -7,6 +7,7 @@ user's domain data), on a separate lock-serialized connection.
 """
 from __future__ import annotations
 
+import math
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
@@ -153,6 +154,23 @@ class IntakeRegistry:
         self.conn.close()
 
 
+def topic_names(registry: IntakeRegistry, store, settings) -> list[str]:
+    """The gate's vocabulary (decision fork #2, both ways): explicit curated
+    topics first, then the graph's own confirmed interests, deduped."""
+    explicit = [t["name"] for t in registry.list_topics()]
+    learned = [name for name, _, _ in store.interest_pool(
+        half_life_days=settings.interest_half_life_days,
+        min_weight=settings.interest_min_weight)][:settings.learned_topics_top_n]
+    return list(dict.fromkeys(explicit + learned))
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(x * x for x in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
 def discover_items(feed_url: str) -> list[str]:
     """Article links for a feed url. The network seam — monkeypatched in tests."""
     from trafilatura import feeds
@@ -168,6 +186,12 @@ def poll_feeds(registry: IntakeRegistry, store, embedder, telemetry, settings, *
     from .ingest.loaders import load_url
     discover = discover or discover_items
     load = load or load_url
+
+    # relevance gate (A3b): embed the topic vocabulary once per pass; items
+    # scoring under the threshold never cost an llm token. no topics ⇒ the
+    # curation itself is the filter, admit everything.
+    names = topic_names(registry, store, settings)
+    topic_vecs = embedder.embed(names, kind="query") if names else []
 
     enqueued = 0
     for feed in registry.due_feeds(now):
@@ -194,8 +218,17 @@ def poll_feeds(registry: IntakeRegistry, store, embedder, telemetry, settings, *
             if doc is None or not doc.text:
                 registry.record_item(feed["id"], link, "error")
                 continue
+            score = None
+            if topic_vecs:
+                (vec,) = embedder.embed([doc.text[:2000]], kind="document")
+                score = max(_cosine(vec, tv) for tv in topic_vecs)
+                if score < settings.relevance_threshold:
+                    log.info("filtered %s (score %.2f < %.2f)",
+                             link, score, settings.relevance_threshold)
+                    registry.record_item(feed["id"], link, "filtered", score)
+                    continue
             telemetry.enqueue(link, {"url": link})
-            registry.record_item(feed["id"], link, "enqueued")
+            registry.record_item(feed["id"], link, "enqueued", score)
             enqueued += 1
         registry.mark_polled(feed["id"], now=now)
     return enqueued

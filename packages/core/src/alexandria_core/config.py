@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Intake (roadmap A3): feed polling backpressure — max items one poll pass
     # may enqueue per feed; the rest wait for the next cadence.
     feed_batch_max: int = 10
+    # Relevance gate (A3b): min cosine between an item and the nearest topic
+    # (explicit + learned) for it to enter the pipeline. No topics ⇒ gate off.
+    relevance_threshold: float = 0.35
+    learned_topics_top_n: int = 10
 
     # Cost telemetry (roadmap F1): executions + per-call ledger, its own SQLite
     # file next to the graph db. Prices are $ per 1M tokens for the configured
