@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     # empty ⇒ api.openai.com
     openai_base_url: str = ""
 
+    # Per-task routing (roadmap A4/F4, small-model roadmap item B): optional
+    # base-URL overrides so easy jobs hit a small local server; empty ⇒ the
+    # default provider. fallback_base_url is where ALL tasks go when the F3
+    # budget is exhausted (instead of deferring the queue).
+    summarize_base_url: str = ""
+    extract_base_url: str = ""
+    relate_base_url: str = ""
+    same_topic_base_url: str = ""
+    fallback_base_url: str = ""
+
     # visual enrichment (opt-in): screenshot + VLM read of the tables/charts/
     # figures trafilatura drops. see docs/superpowers/specs/2026-07-02-pixelrag-*.
     openai_vision_model: str = "gpt-4o-mini"

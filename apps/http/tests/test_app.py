@@ -300,6 +300,17 @@ def test_budget_hard_stop_defers_the_queue():
         assert c.get("/usage").json()["budget"]["over"] == "daily"
 
 
+def test_budget_with_fallback_keeps_processing():
+    # a configured local fallback (F4) means over-budget flips models
+    # instead of deferring the queue
+    with _budget_client(budget_daily_usd=0.5,
+                        fallback_base_url="http://localhost:9/v1") as c:
+        for note in ("first note", "second note"):
+            job = c.post("/ingest", json={"note": note}).json()["job_id"]
+            assert _wait(c, job)["status"] == "done"
+        assert c.get("/usage").json()["budget"]["over"] == "daily"
+
+
 def test_no_budget_processes_everything():
     with _budget_client() as c:
         for note in ("first note", "second note"):

@@ -28,7 +28,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 - [x] Task 4 — A3b: topic-relevance gate — `topic_names` (explicit + interest-pool learned), max-cosine vs `relevance_threshold` (default 0.35) inside `poll_feeds`; filtered items keep their score in `feed_item`
 - [x] Task 5 — F2: usage rollups — `TelemetryStore.usage()/spend_since()`, `GET /usage?days=N` (per-day/task/source), summary strip on the executions page
 - [x] Task 6 — F3: budgets — `budget_daily_usd`/`budget_monthly_usd` knobs, worker defers queued ingests while over budget, `/usage` reports the budget window state
-- [ ] Task 7 — A4/F4: per-task routing + budget flip to local
+- [x] Task 7 — A4/F4: per-task routing + budget flip — `engine/router.py` `RoutedLLM` (per-task base URLs, shared instances per URL), over-budget ⇒ fallback provider instead of deferring; empty config byte-identical to before
 - [ ] Task 8 — web: `#/sources` management page
 - [ ] Task 9 — end-to-end verification
 

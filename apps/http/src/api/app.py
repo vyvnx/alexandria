@@ -57,14 +57,6 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     telemetry = TelemetryStore(settings.executions_db_path,
                                price_in_per_mtok=settings.price_in_per_mtok,
                                price_out_per_mtok=settings.price_out_per_mtok)
-    llm = MeteredLLM(llm or factory.build_llm(settings), telemetry)
-    embedder = MeteredEmbedder(embedder or factory.build_embedder(settings), telemetry)
-    vision = MeteredVision(vision or factory.build_vision(settings), telemetry)
-
-    log.info("Alexandria API ready — db=%s llm=%s vec=%s",
-             settings.db_path, settings.llm, store.vec_available)
-    if not store.vec_available:
-        log.warning("sqlite-vec unavailable — /search falls back to name matching")
 
     # budgets (roadmap F3): metered spend against daily/monthly ceilings
     def _window_start(kind: str) -> str:
@@ -82,6 +74,16 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
                 and telemetry.spend_since(_window_start("monthly")) >= settings.budget_monthly_usd):
             return "monthly"
         return None
+
+    llm = MeteredLLM(llm or factory.build_llm(
+        settings, over_budget=lambda: _over_budget() is not None), telemetry)
+    embedder = MeteredEmbedder(embedder or factory.build_embedder(settings), telemetry)
+    vision = MeteredVision(vision or factory.build_vision(settings), telemetry)
+
+    log.info("Alexandria API ready — db=%s llm=%s vec=%s",
+             settings.db_path, settings.llm, store.vec_available)
+    if not store.vec_available:
+        log.warning("sqlite-vec unavailable — /search falls back to name matching")
 
     # persistent ingest queue (roadmap A1): the execution row IS the job —
     # POST /ingest enqueues it, the worker below claims and runs it, and the
@@ -112,8 +114,9 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         nonlocal budget_paused
         while not stop.is_set():
             # ponytail: hard stop = defer everything until the window resets;
-            # salience-aware partial deferral is F4+ territory
-            over = _over_budget()
+            # salience-aware partial deferral is F4+ territory. with a local
+            # fallback configured, RoutedLLM flips there instead — keep running.
+            over = _over_budget() if not settings.fallback_base_url else None
             if over is not None:
                 if not budget_paused:
                     log.warning("llm budget (%s) reached — deferring queued ingests", over)
