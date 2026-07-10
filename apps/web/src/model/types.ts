@@ -130,6 +130,15 @@ export interface ExecutionRow {
   tasks: Record<string, ExecutionTaskStats>;
 }
 
+/* Rollups from `GET /usage` (F2) — only what the summary strip reads. */
+export interface UsageSummary {
+  days: number;
+  total_calls: number;
+  total_cost_usd: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
 export interface Health {
   ok: boolean;
   vec: boolean;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api } from "../api/client";
-import type { ExecutionRow } from "../model/types";
+import type { ExecutionRow, UsageSummary } from "../model/types";
 import { fmtCost, fmtDuration, fmtTokens } from "./executions";
 
 /* The /executions cost panel (roadmap F1): a plain table straight off the
@@ -9,6 +9,7 @@ import { fmtCost, fmtDuration, fmtTokens } from "./executions";
    filters, or pagination until this proves insufficient. */
 export function ExecutionsPage() {
   const [rows, setRows] = useState<ExecutionRow[] | null>(null);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -18,6 +19,10 @@ export function ExecutionsPage() {
       .catch((e) =>
         setError(e instanceof Error ? e.message : "Couldn't load executions."),
       );
+    api
+      .usage()
+      .then(setUsage)
+      .catch(() => undefined); // the table still stands without the strip
   }, []);
 
   return (
@@ -32,6 +37,15 @@ export function ExecutionsPage() {
             ← back to the atlas
           </a>
         </header>
+
+        {usage && (
+          <p className="mb-4 font-mono text-[0.78rem] text-vellum-dim">
+            last {usage.days} days:{" "}
+            {usage.total_cost_usd > 0 ? fmtCost(usage.total_cost_usd) : "$0"} ·{" "}
+            {usage.total_calls} calls ·{" "}
+            {fmtTokens(usage.prompt_tokens, usage.completion_tokens)} tokens
+          </p>
+        )}
 
         {error && (
           <p role="alert" className="text-rose">

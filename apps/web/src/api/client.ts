@@ -10,6 +10,7 @@ import type {
   IngestJob,
   NodeDetail,
   SearchHit,
+  UsageSummary,
   VizConfig,
 } from "../model/types";
 
@@ -81,4 +82,7 @@ export const api = {
 
   /** Ingest executions ledger (cost/status), newest first. */
   executions: () => request<ExecutionRow[]>("/executions"),
+
+  /** Cost rollups for the summary strip. */
+  usage: (days = 30) => request<UsageSummary>(`/usage?days=${days}`),
 };

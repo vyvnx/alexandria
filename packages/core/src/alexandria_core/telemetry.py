@@ -14,7 +14,7 @@ import threading
 import time
 from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -164,6 +164,54 @@ class TelemetryStore:
                 "tasks": tasks[r["id"]],
             })
         return out
+
+    # ── rollups (roadmap F2/F3) ──────────────────────────────────────────────
+    def spend_since(self, iso: str) -> float:
+        """Total $ spent on llm calls at/after `iso` (unpriced calls count 0)."""
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT COALESCE(SUM(cost_usd), 0) AS c FROM llm_call WHERE at >= ?",
+                (iso,)).fetchone()
+        return row["c"]
+
+    def usage(self, days: int = 30) -> dict:
+        """Where the money goes: totals + per-day/per-task/per-source rollups."""
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        with self._lock:
+            total = self.conn.execute(
+                "SELECT COUNT(*) AS calls, COALESCE(SUM(cost_usd), 0) AS cost,"
+                " COALESCE(SUM(prompt_tokens), 0) AS pt,"
+                " COALESCE(SUM(completion_tokens), 0) AS ct"
+                " FROM llm_call WHERE at >= ?", (since,)).fetchone()
+            per_day = self.conn.execute(
+                "SELECT substr(at, 1, 10) AS day, COUNT(*) AS calls,"
+                " COALESCE(SUM(cost_usd), 0) AS cost FROM llm_call"
+                " WHERE at >= ? GROUP BY day ORDER BY day", (since,)).fetchall()
+            per_task = self.conn.execute(
+                "SELECT task, COUNT(*) AS calls, COALESCE(SUM(cost_usd), 0) AS cost,"
+                " COALESCE(SUM(prompt_tokens), 0) AS pt,"
+                " COALESCE(SUM(completion_tokens), 0) AS ct"
+                " FROM llm_call WHERE at >= ? GROUP BY task", (since,)).fetchall()
+            per_source = self.conn.execute(
+                "SELECT e.source AS source, COUNT(*) AS calls,"
+                " COALESCE(SUM(c.cost_usd), 0) AS cost"
+                " FROM llm_call c JOIN execution e ON c.execution_id = e.id"
+                " WHERE c.at >= ? GROUP BY e.source ORDER BY cost DESC LIMIT 20",
+                (since,)).fetchall()
+        return {
+            "days": days,
+            "total_calls": total["calls"],
+            "total_cost_usd": total["cost"],
+            "prompt_tokens": total["pt"],
+            "completion_tokens": total["ct"],
+            "per_day": [{"day": r["day"], "calls": r["calls"], "cost_usd": r["cost"]}
+                        for r in per_day],
+            "per_task": {r["task"]: {"calls": r["calls"], "cost_usd": r["cost"],
+                                     "prompt_tokens": r["pt"], "completion_tokens": r["ct"]}
+                         for r in per_task},
+            "per_source": [{"source": r["source"], "calls": r["calls"],
+                            "cost_usd": r["cost"]} for r in per_source],
+        }
 
     # ── job queue (roadmap A1): an execution row doubles as the ingest job ──
     def enqueue(self, source: str, payload: dict) -> int:

@@ -165,6 +165,11 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         # cost/status ledger for the /executions panel (F1)
         return telemetry.list_executions(limit)
 
+    @app.get("/usage")
+    def usage(days: int = 30):
+        # where the money goes (F2): totals + per-day/task/source rollups
+        return telemetry.usage(days)
+
     @app.get("/feeds")
     def list_feeds():
         return registry.list_feeds()

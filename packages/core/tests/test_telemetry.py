@@ -184,3 +184,57 @@ def test_telemetry_failure_never_breaks_the_call(store):
     llm = MeteredLLM(FakeLLM(), store)
     store.conn.close()  # simulate a broken telemetry backend
     assert llm.summarize("still works") == FakeLLM().summarize("still works")
+
+
+def _seeded_store():
+    store = TelemetryStore(":memory:", price_in_per_mtok=1.0, price_out_per_mtok=2.0)
+    llm = MeteredLLM(UsageLLM(), store)
+    e1 = store.enqueue("https://a.com/x", {})
+    store.claim_next()
+    set_current_execution(e1)
+    llm.summarize("t")   # 10 in, 5 out
+    llm.summarize("t")
+    store.finish_execution(e1, "succeeded")
+    e2 = store.enqueue("https://b.com/y", {})
+    store.claim_next()
+    set_current_execution(e2)
+    llm.extract("t")     # 200 in, 50 out
+    store.finish_execution(e2, "succeeded")
+    set_current_execution(None)
+    return store
+
+
+def test_usage_rollups():
+    store = _seeded_store()
+    u = store.usage(days=30)
+    assert u["days"] == 30
+    assert u["total_calls"] == 3
+    assert u["prompt_tokens"] == 220 and u["completion_tokens"] == 60
+    assert u["total_cost_usd"] == pytest.approx(220 / 1e6 * 1.0 + 60 / 1e6 * 2.0)
+    assert u["per_task"]["summarize"]["calls"] == 2
+    assert u["per_task"]["extract"]["prompt_tokens"] == 200
+    # all seeded calls happened just now -> one day bucket
+    assert len(u["per_day"]) == 1 and u["per_day"][0]["calls"] == 3
+    by_source = {r["source"]: r for r in u["per_source"]}
+    assert by_source["https://b.com/y"]["cost_usd"] > by_source["https://a.com/x"]["cost_usd"]
+
+
+def test_usage_window_excludes_old_calls():
+    store = _seeded_store()
+    store.conn.execute("UPDATE llm_call SET at='2020-01-01T00:00:00+00:00'"
+                       " WHERE task='extract'")
+    u = store.usage(days=30)
+    assert u["total_calls"] == 2 and "extract" not in u["per_task"]
+
+
+def test_spend_since():
+    store = _seeded_store()
+    assert store.spend_since("2020-01-01T00:00:00+00:00") == pytest.approx(
+        220 / 1e6 * 1.0 + 60 / 1e6 * 2.0)
+    assert store.spend_since("2999-01-01T00:00:00+00:00") == 0.0
+
+
+def test_spend_since_treats_unpriced_calls_as_zero():
+    store = TelemetryStore(":memory:")  # no prices -> cost is NULL
+    MeteredLLM(UsageLLM(), store).summarize("t")
+    assert store.spend_since("2020-01-01T00:00:00+00:00") == 0.0

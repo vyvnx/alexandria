@@ -256,6 +256,17 @@ def test_jobs_survive_in_one_persistent_store(client):
     assert any(str(r["id"]) == job_id for r in c.get("/executions").json())
 
 
+def test_usage_rollup_after_ingest(client):
+    c, _ = client
+    _ingest(c, note="Attention mechanisms power transformers.")
+    u = c.get("/usage").json()
+    assert u["days"] == 30
+    assert u["total_calls"] >= 3
+    assert {"summarize", "extract", "embed"} <= set(u["per_task"])
+    assert len(u["per_day"]) == 1
+    assert u["per_source"][0]["source"] == "note"
+
+
 def test_feeds_crud(client):
     c, _ = client
     r = c.post("/feeds", json={"url": "https://blog.example/rss", "cadence_minutes": 30})
