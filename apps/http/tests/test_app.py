@@ -1,3 +1,5 @@
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -15,15 +17,25 @@ def client():
     app = create_app(store=store, llm=FakeLLM(), embedder=FakeEmbedder(),
                      settings=Settings(_env_file=None, llm="fake",
                                        executions_db_path=":memory:"))
-    return TestClient(app), store
+    # context manager so the lifespan runs — it starts the ingest worker thread
+    with TestClient(app) as c:
+        yield c, store
+
+
+def _wait(c, job_id, timeout=5.0):
+    """Poll a queued ingest job until the worker finishes it (or timeout)."""
+    deadline = time.time() + timeout
+    while True:
+        job = c.get(f"/ingest/{job_id}").json()
+        if job["status"] != "running" or time.time() > deadline:
+            return job
+        time.sleep(0.02)
 
 
 def _ingest(c, **body):
-    """POST an ingest and return the finished job's result. Ingest runs in a
-    background task, which TestClient drives to completion before the POST
-    returns — so one status GET already sees the job done."""
+    """POST an ingest and return the finished job's result."""
     job_id = c.post("/ingest", json=body).json()["job_id"]
-    job = c.get(f"/ingest/{job_id}").json()
+    job = _wait(c, job_id)
     assert job["status"] == "done", job
     return job["result"]
 
@@ -114,7 +126,7 @@ def test_ingest_job_reports_failure_stage(client, monkeypatch):
 
     monkeypatch.setattr("api.app.ingest", _boom)
     job_id = c.post("/ingest", json={"note": "n"}).json()["job_id"]
-    job = c.get(f"/ingest/{job_id}").json()
+    job = _wait(c, job_id)
     assert job["status"] == "failed"
     assert job["stage"] == "embedding"  # last stage retained
     assert "see server logs" in job["error"]
@@ -161,6 +173,7 @@ def test_ingest_passes_visual_flag_to_pipeline(client, monkeypatch):
     monkeypatch.setattr("api.app.ingest", _spy)
     r = c.post("/ingest", json={"note": "n", "visual": True})
     assert r.status_code == 200
+    _wait(c, r.json()["job_id"])
     assert seen["visual"] is True
 
 
@@ -187,6 +200,7 @@ def test_ingest_visual_defaults_false(client, monkeypatch):
     monkeypatch.setattr("api.app.ingest", _spy)
     r = c.post("/ingest", json={"note": "n"})
     assert r.status_code == 200
+    _wait(c, r.json()["job_id"])
     assert seen["visual"] is False
 
 
@@ -216,9 +230,28 @@ def test_executions_records_failure(client, monkeypatch):
         raise RuntimeError("kaboom")
 
     monkeypatch.setattr("api.app.ingest", _boom)
-    c.post("/ingest", json={"note": "n"})
+    job_id = c.post("/ingest", json={"note": "n"}).json()["job_id"]
+    _wait(c, job_id)
     (row,) = c.get("/executions").json()
     assert row["status"] == "failed"
+
+
+def test_job_row_carries_queue_to_done_timestamps(client):
+    c, _ = client
+    job_id = c.post("/ingest", json={"note": "Queued then done."}).json()["job_id"]
+    assert _wait(c, job_id)["status"] == "done"
+    (row,) = c.get("/executions").json()
+    assert row["queued_at"] and row["started_at"] and row["finished_at"]
+    assert row["queued_at"] <= row["started_at"] <= row["finished_at"]
+
+
+def test_jobs_survive_in_one_persistent_store(client):
+    # the queue is the execution table: the job POST /ingest created is the
+    # same row GET /executions lists — no separate in-memory registry
+    c, _ = client
+    job_id = c.post("/ingest", json={"note": "One row, two views."}).json()["job_id"]
+    _wait(c, job_id)
+    assert any(str(r["id"]) == job_id for r in c.get("/executions").json())
 
 
 def test_dismiss_node(client):

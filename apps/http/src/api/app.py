@@ -1,9 +1,10 @@
-import uuid
+import threading
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 from typing import Literal
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -50,7 +51,49 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     if not store.vec_available:
         log.warning("sqlite-vec unavailable — /search falls back to name matching")
 
-    app = FastAPI(title="Alexandria")
+    # persistent ingest queue (roadmap A1): the execution row IS the job —
+    # POST /ingest enqueues it, the worker below claims and runs it, and the
+    # same row is what GET /executions lists. Queued jobs survive a restart.
+    # ponytail: one worker thread, one uvicorn process; add workers when
+    # ingest volume demands it
+    wake = threading.Event()
+    stop = threading.Event()
+
+    def _run_job(row: dict):
+        eid = row["id"]
+        body = IngestBody(**(row["payload"] or {}))
+        set_current_execution(eid)
+        try:
+            res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
+                         abstraction=body.abstraction, visual=body.visual, vision=vision,
+                         on_stage=lambda s: telemetry.set_stage(eid, s))
+            telemetry.finish_execution(eid, "succeeded", result=asdict(res))
+        except Exception:
+            log.exception("ingest failed for source=%s", row["source"])
+            telemetry.finish_execution(eid, "failed", error="ingest failed — see server logs")
+        finally:
+            set_current_execution(None)
+
+    def _worker():
+        while not stop.is_set():
+            row = telemetry.claim_next()
+            if row is None:
+                wake.wait(timeout=0.5)
+                wake.clear()
+                continue
+            _run_job(row)
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        interrupted = telemetry.recover()
+        if interrupted:
+            log.warning("failed %d ingest job(s) interrupted by restart", interrupted)
+        threading.Thread(target=_worker, name="ingest-worker", daemon=True).start()
+        yield
+        stop.set()
+        wake.set()
+
+    app = FastAPI(title="Alexandria", lifespan=lifespan)
     app.state.store, app.state.llm, app.state.embedder, app.state.settings = (
         store, llm, embedder, settings)
     app.state.vision = vision
@@ -77,47 +120,25 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             "extraction_abstraction": s.extraction_abstraction,
         }
 
-    # Ingest runs in the background so the UI can poll real stage progress.
-    # ponytail: unbounded in-memory dict — one small entry per ingest, single
-    # user, lost on restart. Add an LRU cap only if it ever grows.
-    jobs: dict[str, dict] = {}
-
-    def _run_ingest(job_id: str, body: IngestBody):
-        job = jobs[job_id]
-        eid = telemetry.begin_execution(body.url or "note")
-
-        def stage(s):
-            job.update(stage=s)
-            telemetry.set_stage(eid, s)
-
-        try:
-            res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
-                         abstraction=body.abstraction, visual=body.visual, vision=vision,
-                         on_stage=stage)
-            job.update(status="done", result=asdict(res))
-            telemetry.finish_execution(eid, "succeeded", result=asdict(res))
-        except Exception:
-            log.exception("ingest failed for url=%s", body.url)
-            job.update(status="failed", error="ingest failed — see server logs")
-            telemetry.finish_execution(eid, "failed", error="ingest failed — see server logs")
-        finally:
-            set_current_execution(None)
-
     @app.post("/ingest")
-    def do_ingest(body: IngestBody, background: BackgroundTasks):
+    def do_ingest(body: IngestBody):
         if not body.url and not body.note:
             raise HTTPException(400, "provide url and/or note")
-        job_id = uuid.uuid4().hex
-        jobs[job_id] = {"status": "running", "stage": "queued", "result": None, "error": None}
-        background.add_task(_run_ingest, job_id, body)
-        return {"job_id": job_id}
+        job_id = telemetry.enqueue(body.url or "note", body.model_dump())
+        wake.set()
+        return {"job_id": str(job_id)}
+
+    # frozen polling contract for the web ChartProgress: status running|done|failed
+    _JOB_STATUS = {"queued": "running", "running": "running",
+                   "succeeded": "done", "failed": "failed"}
 
     @app.get("/ingest/{job_id}")
     def ingest_status(job_id: str):
-        job = jobs.get(job_id)
-        if job is None:
+        row = telemetry.get_execution(int(job_id)) if job_id.isdigit() else None
+        if row is None:
             raise HTTPException(404, "unknown job")
-        return job
+        return {"status": _JOB_STATUS[row["status"]], "stage": row["stage"],
+                "result": row["result"], "error": row["error"]}
 
     @app.get("/executions")
     def executions(limit: int = 50):

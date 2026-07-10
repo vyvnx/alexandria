@@ -104,16 +104,6 @@ class TelemetryStore:
             self.conn.executescript(_SCHEMA)
 
     # ── executions ──────────────────────────────────────────────────────────
-    def begin_execution(self, source: str) -> int:
-        """Open a running execution and make it current for this thread."""
-        now = _now()
-        with self._lock, self.conn:
-            cur = self.conn.execute(
-                "INSERT INTO execution (source, status, stage, queued_at, started_at)"
-                " VALUES (?, 'running', 'queued', ?, ?)", (source, now, now))
-        set_current_execution(cur.lastrowid)
-        return cur.lastrowid
-
     def finish_execution(self, execution_id: int, status: str, *,
                          result: dict | None = None, error: str | None = None) -> None:
         with self._lock, self.conn:
@@ -174,6 +164,38 @@ class TelemetryStore:
                 "tasks": tasks[r["id"]],
             })
         return out
+
+    # ── job queue (roadmap A1): an execution row doubles as the ingest job ──
+    def enqueue(self, source: str, payload: dict) -> int:
+        """Queue an ingest job; the row starts as status=queued/stage=queued."""
+        with self._lock, self.conn:
+            cur = self.conn.execute(
+                "INSERT INTO execution (source, payload, queued_at) VALUES (?, ?, ?)",
+                (source, json.dumps(payload), _now()))
+        return cur.lastrowid
+
+    def claim_next(self) -> dict | None:
+        """Flip the oldest queued job to running and return it (None if idle)."""
+        with self._lock, self.conn:
+            row = self.conn.execute(
+                "SELECT id FROM execution WHERE status='queued'"
+                " ORDER BY id LIMIT 1").fetchone()
+            if row is None:
+                return None
+            self.conn.execute(
+                "UPDATE execution SET status='running', started_at=? WHERE id=?",
+                (_now(), row["id"]))
+        return self.get_execution(row["id"])
+
+    def recover(self) -> int:
+        """Startup recovery: jobs interrupted mid-run are failed (a re-run could
+        double-charge llm calls); queued jobs survive untouched and just run."""
+        with self._lock, self.conn:
+            cur = self.conn.execute(
+                "UPDATE execution SET status='failed',"
+                " error='interrupted by restart', finished_at=?"
+                " WHERE status='running'", (_now(),))
+        return cur.rowcount
 
     # ── per-call recording (used by the Metered* proxies) ───────────────────
     def _record_call(self, rec: _ActiveCall, duration_ms: int) -> None:

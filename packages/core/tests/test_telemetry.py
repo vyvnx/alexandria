@@ -92,7 +92,9 @@ def test_add_usage_outside_metered_call_is_noop(store):
 
 
 def test_execution_groups_calls(store):
-    eid = store.begin_execution("https://example.com")
+    eid = store.enqueue("https://example.com", {})
+    store.claim_next()
+    set_current_execution(eid)
     MeteredLLM(UsageLLM(), store).summarize("t")
     store.finish_execution(eid, "succeeded", result={"nodes_added": 1})
     (call,) = _calls(store)
@@ -116,11 +118,15 @@ def test_get_execution_unknown_id(store):
 def test_list_executions_newest_first_with_task_breakdown():
     store = TelemetryStore(":memory:", price_in_per_mtok=1.0, price_out_per_mtok=2.0)
     llm = MeteredLLM(UsageLLM(), store)
-    e1 = store.begin_execution("first")
+    e1 = store.enqueue("first", {})
+    store.claim_next()
+    set_current_execution(e1)
     llm.summarize("t")
     llm.summarize("t")
     store.finish_execution(e1, "succeeded")
-    e2 = store.begin_execution("second")
+    e2 = store.enqueue("second", {})
+    store.claim_next()
+    set_current_execution(e2)
     llm.extract("t")
     store.finish_execution(e2, "failed", error="boom")
     set_current_execution(None)
@@ -137,10 +143,41 @@ def test_list_executions_newest_first_with_task_breakdown():
 
 
 def test_stage_updates(store):
-    eid = store.begin_execution("x")
+    eid = store.enqueue("x", {})
     store.set_stage(eid, "extracting")
     assert store.get_execution(eid)["stage"] == "extracting"
-    set_current_execution(None)
+
+
+def test_enqueue_then_claim(store):
+    eid = store.enqueue("https://x", {"url": "https://x", "visual": False})
+    row = store.get_execution(eid)
+    assert row["status"] == "queued" and row["started_at"] is None
+    claimed = store.claim_next()
+    assert claimed["id"] == eid
+    assert claimed["payload"] == {"url": "https://x", "visual": False}
+    after = store.get_execution(eid)
+    assert after["status"] == "running" and after["started_at"] is not None
+
+
+def test_claim_next_on_empty_queue(store):
+    assert store.claim_next() is None
+
+
+def test_claim_is_fifo(store):
+    a = store.enqueue("a", {})
+    b = store.enqueue("b", {})
+    assert store.claim_next()["id"] == a
+    assert store.claim_next()["id"] == b
+
+
+def test_recover_fails_interrupted_running_but_keeps_queued(store):
+    interrupted = store.enqueue("r", {})
+    store.claim_next()
+    queued = store.enqueue("q", {})
+    assert store.recover() == 1
+    failed = store.get_execution(interrupted)
+    assert failed["status"] == "failed" and "interrupted" in failed["error"]
+    assert store.get_execution(queued)["status"] == "queued"
 
 
 def test_telemetry_failure_never_breaks_the_call(store):
