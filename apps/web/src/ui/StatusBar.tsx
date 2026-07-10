@@ -36,6 +36,12 @@ export function StatusBar({ counts, health }: { counts: GraphCounts | null; heal
         {counts ? counts.nodes : "—"} stars · {counts ? counts.edges : "—"} lines
       </span>
       <span className="flex-1" />
+      <a
+        href="#/executions"
+        className="pointer-events-auto hover:text-vellum"
+      >
+        executions
+      </a>
       {health && (
         <>
           <span>llm: {health.llm}</span>

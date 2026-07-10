@@ -107,6 +107,29 @@ export interface IngestJob {
   error: string | null;
 }
 
+/* One ingest run in the executions ledger, from `GET /executions` (F1). */
+export interface ExecutionTaskStats {
+  calls: number;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  cost_usd: number | null;
+}
+
+export interface ExecutionRow {
+  id: number;
+  source: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  stage: string;
+  queued_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_usd: number | null;
+  tasks: Record<string, ExecutionTaskStats>;
+}
+
 export interface Health {
   ok: boolean;
   vec: boolean;

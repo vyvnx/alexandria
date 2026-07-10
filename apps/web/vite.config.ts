@@ -11,7 +11,7 @@ import { defineConfig } from "vite";
 // route) must be written as `/node/` — bare `/node` also matches Vite's own
 // `/node_modules/.vite/deps/*.js` requests and forwards React itself to the
 // backend (→ 404 → blank page). Keep these as specific as possible.
-const API_ROUTES = ["/ingest", "/graph", "/search", "/node/", "/healthz", "/config"];
+const API_ROUTES = ["/ingest", "/graph", "/search", "/node/", "/healthz", "/config", "/executions"];
 const API_TARGET = process.env.ALEX_API_URL ?? "http://localhost:8000";
 
 export default defineConfig({

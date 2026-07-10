@@ -4,6 +4,7 @@
 
 import type {
   Abstraction,
+  ExecutionRow,
   GraphResponse,
   Health,
   IngestJob,
@@ -77,4 +78,7 @@ export const api = {
 
   /** Current stage/status of a running ingest job. */
   ingestStatus: (jobId: string) => request<IngestJob>(`/ingest/${jobId}`),
+
+  /** Ingest executions ledger (cost/status), newest first. */
+  executions: () => request<ExecutionRow[]>("/executions"),
 };

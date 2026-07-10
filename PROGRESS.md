@@ -17,7 +17,7 @@ Tracks implementation of `docs/roadmap/2026-07-09-target-architecture.md`.
 - [x] Task 2 — F1: telemetry store + metered proxies (core) — `alexandria_core/telemetry.py`: `TelemetryStore`, `Metered{LLM,Embedder,Vision}`, `add_usage`, `set_current_execution`; config gains `executions_db_path` + `price_{in,out}_per_mtok`; 13 new tests
 - [x] Task 3 — F1: surface usage from OpenAI provider — all chat round-trips funnel through `_create`, which reports `resp.usage` via `add_usage`
 - [x] Task 4 — F1: wire telemetry into API + `GET /executions` — providers wrapped in `create_app`, ingests bracketed by executions, `.env.example` documents the knobs
-- [ ] Task 5 — F1: `/executions` web page
+- [x] Task 5 — F1: `/executions` web page — hash-routed `ExecutionsPage` (`#/executions`), StatusBar link, formatters unit-tested, verified in the browser against a live fake ingest
 - [ ] Task 6 — A1: persistent job queue
 
 ## Notes for a fresh session
