@@ -12,6 +12,9 @@ from alexandria_core.graph.models import KIND_SOURCE
 from alexandria_core.graph.store import GraphStore
 from alexandria_core.ingest.pipeline import ingest
 from alexandria_core.logging_config import configure_logging, get_logger
+from alexandria_core.telemetry import (
+    MeteredEmbedder, MeteredLLM, MeteredVision, TelemetryStore, set_current_execution,
+)
 from engine import factory
 
 log = get_logger("api")
@@ -33,9 +36,14 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     if store is None:
         store = GraphStore(settings.db_path)
         store.init_schema()
-    llm = llm or factory.build_llm(settings)
-    embedder = embedder or factory.build_embedder(settings)
-    vision = vision or factory.build_vision(settings)
+    # every provider (injected fakes included) is metered through the telemetry
+    # seam (F1): per-call task/tokens/cost/duration, grouped by ingest execution
+    telemetry = TelemetryStore(settings.executions_db_path,
+                               price_in_per_mtok=settings.price_in_per_mtok,
+                               price_out_per_mtok=settings.price_out_per_mtok)
+    llm = MeteredLLM(llm or factory.build_llm(settings), telemetry)
+    embedder = MeteredEmbedder(embedder or factory.build_embedder(settings), telemetry)
+    vision = MeteredVision(vision or factory.build_vision(settings), telemetry)
 
     log.info("Alexandria API ready — db=%s llm=%s vec=%s",
              settings.db_path, settings.llm, store.vec_available)
@@ -46,6 +54,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     app.state.store, app.state.llm, app.state.embedder, app.state.settings = (
         store, llm, embedder, settings)
     app.state.vision = vision
+    app.state.telemetry = telemetry
 
     def _node_dict(n):
         return {"id": n.id, "kind": n.kind, "name": n.name, "data": n.data}
@@ -75,14 +84,24 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
 
     def _run_ingest(job_id: str, body: IngestBody):
         job = jobs[job_id]
+        eid = telemetry.begin_execution(body.url or "note")
+
+        def stage(s):
+            job.update(stage=s)
+            telemetry.set_stage(eid, s)
+
         try:
             res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
                          abstraction=body.abstraction, visual=body.visual, vision=vision,
-                         on_stage=lambda s: job.update(stage=s))
+                         on_stage=stage)
             job.update(status="done", result=asdict(res))
+            telemetry.finish_execution(eid, "succeeded", result=asdict(res))
         except Exception:
             log.exception("ingest failed for url=%s", body.url)
             job.update(status="failed", error="ingest failed — see server logs")
+            telemetry.finish_execution(eid, "failed", error="ingest failed — see server logs")
+        finally:
+            set_current_execution(None)
 
     @app.post("/ingest")
     def do_ingest(body: IngestBody, background: BackgroundTasks):
@@ -99,6 +118,11 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         if job is None:
             raise HTTPException(404, "unknown job")
         return job
+
+    @app.get("/executions")
+    def executions(limit: int = 50):
+        # cost/status ledger for the /executions panel (F1)
+        return telemetry.list_executions(limit)
 
     @app.get("/graph")
     def graph(node_id: int | None = None, k: int = 2):

@@ -13,7 +13,8 @@ def client():
     store = GraphStore(":memory:")
     store.init_schema()
     app = create_app(store=store, llm=FakeLLM(), embedder=FakeEmbedder(),
-                     settings=Settings(_env_file=None, llm="fake"))
+                     settings=Settings(_env_file=None, llm="fake",
+                                       executions_db_path=":memory:"))
     return TestClient(app), store
 
 
@@ -51,7 +52,7 @@ def test_config_reflects_overridden_settings():
     store = GraphStore(":memory:")
     store.init_schema()
     settings = Settings(
-        _env_file=None, llm="fake",
+        _env_file=None, llm="fake", executions_db_path=":memory:",
         star_size_min=2.0, star_size_max=20.0,
         galaxy_resolution=1.5, min_galaxy_size=5,
     )
@@ -187,6 +188,37 @@ def test_ingest_visual_defaults_false(client, monkeypatch):
     r = c.post("/ingest", json={"note": "n"})
     assert r.status_code == 200
     assert seen["visual"] is False
+
+
+def test_executions_empty(client):
+    c, _ = client
+    assert c.get("/executions").json() == []
+
+
+def test_executions_after_ingest(client):
+    c, _ = client
+    _ingest(c, note="Attention mechanisms power transformers.")
+    rows = c.get("/executions").json()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["source"] == "note"
+    assert row["status"] == "succeeded"
+    assert row["finished_at"] is not None
+    # the fake pipeline exercised the metered seam per task
+    assert {"summarize", "extract", "embed"} <= set(row["tasks"])
+    assert row["tasks"]["summarize"]["calls"] == 1
+
+
+def test_executions_records_failure(client, monkeypatch):
+    c, _ = client
+
+    def _boom(*a, **kw):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr("api.app.ingest", _boom)
+    c.post("/ingest", json={"note": "n"})
+    (row,) = c.get("/executions").json()
+    assert row["status"] == "failed"
 
 
 def test_dismiss_node(client):
