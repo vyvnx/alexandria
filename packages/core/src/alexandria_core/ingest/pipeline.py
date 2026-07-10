@@ -48,7 +48,7 @@ def _dedup_result(store: GraphStore, source_id: int) -> IngestResult:
 def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
            settings: Settings, *, url=None, note=None, fetch=None,
            abstraction=None, visual: bool = False, vision=None,
-           render_fn=None, on_stage=None) -> IngestResult:
+           render_fn=None, on_stage=None, doc=None) -> IngestResult:
     level = abstraction or settings.extraction_abstraction
     report = on_stage or (lambda _s: None)  # stage progress callback; no-op if unset
     log.info("ingest start: url=%s note=%s abstraction=%s",
@@ -61,9 +61,12 @@ def ingest(store: GraphStore, llm: LLMProvider, embedder: EmbeddingProvider,
         if existing is not None:
             return _dedup_result(store, existing)
 
-    if url:
-        report("loading")
-    doc = load_url(url, fetch=fetch) if url else None
+    # a preloaded doc (pdf upload, any future loader) skips the url fetch —
+    # every loader normalizes to the same LoadedDoc shape (A2)
+    if doc is None:
+        if url:
+            report("loading")
+        doc = load_url(url, fetch=fetch) if url else None
     title = (doc.title if doc and doc.title else None) or (url or "Note")
     article = doc.text if doc else ""
 

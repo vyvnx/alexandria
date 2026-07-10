@@ -275,3 +275,17 @@ def test_same_content_from_two_urls_is_deduped(built):
     second = ingest(s["store"], llm, s["embedder"], s["settings"],
                     url="https://mirror.com/a", fetch=lambda u: HTML)
     assert second.deduped is True and second.source_id == first.source_id
+
+
+def test_ingest_accepts_a_preloaded_doc_and_dedups(built):
+    from alexandria_core.ingest.loaders import LoadedDoc
+    s = built
+    doc = LoadedDoc(url=None, title="notes.pdf", author=None, published_at=None,
+                    text="Transformers use attention. Vaswani wrote it.")
+    first = ingest(s["store"], s["llm"], s["embedder"], s["settings"], doc=doc,
+                   fetch=lambda u: None)
+    assert first.deduped is False and first.title == "notes.pdf"
+    assert s["store"].get_source(first.source_id)["raw_text"].startswith("Transformers")
+    second = ingest(s["store"], s["llm"], s["embedder"], s["settings"], doc=doc,
+                    fetch=lambda u: None)
+    assert second.deduped is True and second.source_id == first.source_id

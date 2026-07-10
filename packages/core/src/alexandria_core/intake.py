@@ -156,11 +156,20 @@ class IntakeRegistry:
 
 def topic_names(registry: IntakeRegistry, store, settings) -> list[str]:
     """The gate's vocabulary (decision fork #2, both ways): explicit curated
-    topics first, then the graph's own confirmed interests, deduped."""
+    topics first, then the graph's own — behaviorally-recurring interests plus
+    its strongest concepts by pagerank (the D5 insights→intake loop) — deduped."""
+    from .algo import build_adjacency, pagerank
+    from .graph.models import KIND_CONCEPT
+
     explicit = [t["name"] for t in registry.list_topics()]
-    learned = [name for name, _, _ in store.interest_pool(
+    recurring = [name for name, _, _ in store.interest_pool(
         half_life_days=settings.interest_half_life_days,
-        min_weight=settings.interest_min_weight)][:settings.learned_topics_top_n]
+        min_weight=settings.interest_min_weight)]
+    pr = pagerank(build_adjacency(store))
+    concepts = {n.id: n.name for n in store.all_nodes() if n.kind == KIND_CONCEPT}
+    ranked = [concepts[i] for i in sorted(concepts, key=lambda i: -pr.get(i, 0.0))
+              if pr.get(i, 0.0) > 0]
+    learned = list(dict.fromkeys(recurring + ranked))[:settings.learned_topics_top_n]
     return list(dict.fromkeys(explicit + learned))
 
 

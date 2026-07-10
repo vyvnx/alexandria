@@ -44,6 +44,9 @@ class LLMProvider(Protocol):
     def relate(self, names: list[str], text: str) -> list[Relation]: ...
     # Gray-zone resolver adjudicator: are two labels the same topic? (low-temp, JSON).
     def same_topic(self, label_a: str, label_b: str) -> TopicMatch: ...
+    # GraphRAG synthesis: answer a question from numbered context passages,
+    # citing them as [n]. Context comes from the retrieved subgraph.
+    def answer(self, question: str, context: str) -> str: ...
 
 
 class EmbeddingProvider(Protocol):

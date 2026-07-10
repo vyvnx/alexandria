@@ -45,6 +45,10 @@ class Settings(BaseSettings):
 
     db_path: str = "../data/alexandria.db"
 
+    # Uploaded files (roadmap A2b): stored content-addressed (sha256 name) so
+    # re-uploading is a filesystem no-op; provenance for later re-processing.
+    upload_dir: str = "../data/uploads"
+
     # Intake (roadmap A3): feed polling backpressure — max items one poll pass
     # may enqueue per feed; the rest wait for the next cadence.
     feed_batch_max: int = 10
@@ -99,7 +103,7 @@ class Settings(BaseSettings):
     min_galaxy_size: int = 3              # communities below this draw no hull (lone stars)
 
 
-    @field_validator("db_path", "executions_db_path")
+    @field_validator("db_path", "executions_db_path", "upload_dir")
     @classmethod
     def _anchor_db_path(cls, v: str) -> str:
         # A relative db_path would otherwise be resolved by sqlite against the

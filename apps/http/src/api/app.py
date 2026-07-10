@@ -1,3 +1,4 @@
+import hashlib
 import sqlite3
 import threading
 from contextlib import asynccontextmanager
@@ -6,14 +7,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from alexandria_core.config import get_settings, Settings
 from alexandria_core.graph.models import KIND_SOURCE
 from alexandria_core.graph.store import GraphStore
+from alexandria_core.ingest.loaders import load_pdf
 from alexandria_core.ingest.pipeline import ingest
+from alexandria_core.ask import ask as graphrag_ask
+from alexandria_core.digest import build_digest, render_digest
+from alexandria_core.insights import compute_insights
 from alexandria_core.intake import IntakeRegistry, poll_feeds
 from alexandria_core.logging_config import configure_logging, get_logger
 from alexandria_core.telemetry import (
@@ -95,13 +100,27 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
 
     def _run_job(row: dict):
         eid = row["id"]
-        body = IngestBody(**(row["payload"] or {}))
+        payload = row["payload"] or {}
         set_current_execution(eid)
+        stage = lambda s: telemetry.set_stage(eid, s)  # noqa: E731
         try:
-            res = ingest(store, llm, embedder, settings, url=body.url, note=body.note,
-                         abstraction=body.abstraction, visual=body.visual, vision=vision,
-                         on_stage=lambda s: telemetry.set_stage(eid, s))
+            if "file_path" in payload:  # uploaded file (A2b)
+                doc = load_pdf(Path(payload["file_path"]).read_bytes(),
+                               filename=payload.get("filename") or "")
+                if not doc.text:
+                    raise ValueError(
+                        "no text layer — scanned pdfs need ocr (not installed)")
+                res = ingest(store, llm, embedder, settings, doc=doc,
+                             abstraction=payload.get("abstraction"), on_stage=stage)
+            else:
+                body = IngestBody(**payload)
+                res = ingest(store, llm, embedder, settings, url=body.url,
+                             note=body.note, abstraction=body.abstraction,
+                             visual=body.visual, vision=vision, on_stage=stage)
             telemetry.finish_execution(eid, "succeeded", result=asdict(res))
+        except ValueError as e:
+            log.warning("ingest failed for source=%s: %s", row["source"], e)
+            telemetry.finish_execution(eid, "failed", error=str(e))
         except Exception:
             log.exception("ingest failed for source=%s", row["source"])
             telemetry.finish_execution(eid, "failed", error="ingest failed — see server logs")
@@ -183,6 +202,25 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         wake.set()
         return {"job_id": str(job_id)}
 
+    @app.post("/ingest/file")
+    async def do_ingest_file(file: UploadFile = File(...),
+                             abstraction: str | None = Form(None)):
+        if abstraction not in (None, "abstract", "balanced", "exhaustive"):
+            raise HTTPException(422, "unknown abstraction level")
+        data = await file.read()
+        if not data:
+            raise HTTPException(400, "empty file")
+        # content-addressed on disk: same bytes ⇒ same path, kept for provenance
+        path = Path(settings.upload_dir) / f"{hashlib.sha256(data).hexdigest()}.pdf"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        job_id = telemetry.enqueue(file.filename or "upload.pdf",
+                                   {"file_path": str(path),
+                                    "filename": file.filename,
+                                    "abstraction": abstraction})
+        wake.set()
+        return {"job_id": str(job_id)}
+
     # frozen polling contract for the web ChartProgress: status running|done|failed
     _JOB_STATUS = {"queued": "running", "running": "running",
                    "succeeded": "done", "failed": "failed"}
@@ -199,6 +237,26 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     def executions(limit: int = 50):
         # cost/status ledger for the /executions panel (F1)
         return telemetry.list_executions(limit)
+
+    @app.get("/insights")
+    def insights():
+        # structural insights over the graph tier (D2), computed on demand
+        return compute_insights(store, settings)
+
+    @app.get("/ask")
+    def ask_endpoint(q: str = ""):
+        # graphrag q&a (D3): cited answer from a connected subgraph
+        if not q.strip():
+            raise HTTPException(400, "provide a question via ?q=")
+        return graphrag_ask(store, embedder, llm, settings, q)
+
+    @app.get("/digest")
+    def digest(days: int = 7, narrative: bool = False):
+        # weekly digest (D4); llm narrative is opt-in so a page load spends nothing
+        d = build_digest(store, settings, days=days)
+        if narrative:
+            d["narrative"] = llm.summarize(render_digest(d))
+        return d
 
     @app.get("/usage")
     def usage(days: int = 30):

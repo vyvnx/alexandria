@@ -12,13 +12,14 @@ from alexandria_core.graph.models import KIND_CONCEPT
 
 
 @pytest.fixture
-def client():
+def client(tmp_path):
     store = GraphStore(":memory:")
     store.init_schema()
     app = create_app(store=store, llm=FakeLLM(), embedder=FakeEmbedder(),
                      registry=IntakeRegistry(":memory:"),
                      settings=Settings(_env_file=None, llm="fake",
-                                       executions_db_path=":memory:"))
+                                       executions_db_path=":memory:",
+                                       upload_dir=str(tmp_path)))
     # context manager so the lifespan runs — it starts the ingest worker thread
     with TestClient(app) as c:
         yield c, store
@@ -256,6 +257,42 @@ def test_jobs_survive_in_one_persistent_store(client):
     assert any(str(r["id"]) == job_id for r in c.get("/executions").json())
 
 
+def test_insights_after_ingests(client):
+    c, _ = client
+    _ingest(c, note="Attention mechanisms power transformers today.")
+    _ingest(c, note="Attention improves retrieval models notably.")
+    ins = c.get("/insights").json()
+    assert ins["stats"]["nodes"] > 0 and ins["stats"]["edges"] > 0
+    names = [i["name"] for i in ins["strongest_interests"]]
+    assert "Attention" in names  # recurs across both notes → high pagerank
+    assert ins["communities"]
+
+
+def test_ask_answers_with_citations(client):
+    c, _ = client
+    _ingest(c, note="Attention mechanisms power transformers today.")
+    res = c.get("/ask", params={"q": "what powers transformers?"}).json()
+    assert res["answer"] and res["passages"] >= 1
+    assert res["citations"] and all("name" in cit for cit in res["citations"])
+
+
+def test_ask_requires_a_question(client):
+    c, _ = client
+    assert c.get("/ask").status_code == 400
+
+
+def test_digest_counts_the_week(client):
+    c, _ = client
+    _ingest(c, note="Attention mechanisms power transformers today.")
+    calls_before = len(c.get("/executions").json()[0]["tasks"])
+    d = c.get("/digest").json()
+    assert d["new_sources"] == 1 and d["new_nodes"] > 1
+    assert "narrative" not in d  # default spends nothing
+    d2 = c.get("/digest", params={"narrative": "true"}).json()
+    assert d2["narrative"]
+    assert calls_before >= 1  # sanity: the ingest itself was metered
+
+
 def test_usage_rollup_after_ingest(client):
     c, _ = client
     _ingest(c, note="Attention mechanisms power transformers.")
@@ -378,6 +415,39 @@ def test_topics_crud(client):
     assert c.delete(f"/topics/{tid}").status_code == 200
     assert c.get("/topics").json() == []
     assert c.delete("/topics/999").status_code == 404
+
+
+def _pdf_bytes(text="Spaced repetition beats cramming, according to Ebbinghaus."):
+    import fitz
+    doc = fitz.open()
+    doc.new_page().insert_text((72, 72), text)
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+def test_pdf_upload_flows_through_the_queue(client):
+    c, store = client
+    pdf = _pdf_bytes()
+    r = c.post("/ingest/file", files={"file": ("notes.pdf", pdf, "application/pdf")})
+    assert r.status_code == 200
+    job = _wait(c, r.json()["job_id"])
+    assert job["status"] == "done", job
+    assert job["result"]["title"] == "notes.pdf"
+    assert store.get_source(job["result"]["source_id"])["raw_text"].startswith("Spaced")
+    # the same bytes again dedup — no second source, no llm spend
+    r2 = c.post("/ingest/file", files={"file": ("again.pdf", pdf, "application/pdf")})
+    job2 = _wait(c, r2.json()["job_id"])
+    assert job2["result"]["deduped"] is True
+    assert job2["result"]["source_id"] == job["result"]["source_id"]
+
+
+def test_textless_pdf_fails_with_actionable_error(client):
+    c, _ = client
+    r = c.post("/ingest/file", files={"file": ("scan.pdf", b"not a pdf", "application/pdf")})
+    job = _wait(c, r.json()["job_id"])
+    assert job["status"] == "failed"
+    assert "ocr" in job["error"].lower()
 
 
 def test_dismiss_node(client):

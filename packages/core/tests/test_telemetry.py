@@ -238,3 +238,11 @@ def test_spend_since_treats_unpriced_calls_as_zero():
     store = TelemetryStore(":memory:")  # no prices -> cost is NULL
     MeteredLLM(UsageLLM(), store).summarize("t")
     assert store.spend_since("2020-01-01T00:00:00+00:00") == 0.0
+
+
+def test_metered_answer_records_a_row(store):
+    llm = MeteredLLM(FakeLLM(), store)
+    out = llm.answer("what is attention?", "[1] attention is all you need")
+    assert isinstance(out, str) and "[1]" in out
+    (call,) = _calls(store)
+    assert call["task"] == "answer"

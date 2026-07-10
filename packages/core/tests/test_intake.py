@@ -308,3 +308,20 @@ def test_idle_pass_with_no_due_feeds_never_touches_the_embedder(world):
 
     assert poll_feeds(w["reg"], w["store"], _Boom(), w["telemetry"], w["settings"],
                       discover=lambda u: [], load=_doc) == 0
+
+
+def test_pagerank_hub_joins_learned_topics_without_recurrence(world):
+    w = world
+    store = w["store"]
+    # one source only (no interest-pool recurrence), but "graphs" is the hub
+    # every other concept links to — pagerank should surface it
+    hub = store.add_node(KIND_CONCEPT, "graphs")
+    sid = store.add_node("source", "s")
+    store.add_source(sid, url=None, author=None, published_at=None,
+                     raw_text="", my_note=None, summary="")
+    store.add_edge(sid, hub, "about", from_source_id=sid)
+    for name in ("embeddings", "vectors", "traversal", "communities"):
+        n = store.add_node(KIND_CONCEPT, name)
+        store.add_edge(hub, n, "uses")
+    assert store.interest_pool(half_life_days=90, min_weight=1.5) == []  # no recurrence
+    assert "graphs" in topic_names(w["reg"], store, w["settings"])

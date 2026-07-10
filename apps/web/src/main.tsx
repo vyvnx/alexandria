@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./app/App";
 import { ExecutionsPage } from "./ui/ExecutionsPage";
+import { InsightsPage } from "./ui/InsightsPage";
 import { SourcesPage } from "./ui/SourcesPage";
 import "./index.css";
 
@@ -17,6 +18,7 @@ function Root() {
   }, []);
   if (hash.startsWith("#/executions")) return <ExecutionsPage />;
   if (hash.startsWith("#/sources")) return <SourcesPage />;
+  if (hash.startsWith("#/insights")) return <InsightsPage />;
   return <App />;
 }
 

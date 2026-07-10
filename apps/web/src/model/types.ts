@@ -146,6 +146,45 @@ export interface TopicRow {
   weight: number;
 }
 
+/* Intelligence layer (D2–D4): insights, graphrag answers, digests. */
+export interface InsightNode {
+  id: number;
+  name: string;
+  kind?: NodeKind;
+  score: number;
+}
+
+export interface Insights {
+  stats: { nodes: number; edges: number };
+  strongest_interests: InsightNode[];
+  communities: { id: number; size: number; label: string }[];
+  bridges: InsightNode[];
+  suggested_connections: {
+    a: { id: number; name: string };
+    b: { id: number; name: string };
+    common: number;
+  }[];
+  trending: { name: string; weight: number }[];
+  contradictions: { a: string; b: string; evidence: string }[];
+}
+
+export interface AskResult {
+  answer: string;
+  citations: { n: number; node_id: number; name: string }[];
+  passages: number;
+}
+
+export interface Digest {
+  days: number;
+  new_sources: number;
+  new_nodes: number;
+  top_new: InsightNode[];
+  trending: { name: string; weight: number }[];
+  resurface: InsightNode[];
+  contradictions: number;
+  narrative?: string;
+}
+
 /* Rollups from `GET /usage` (F2) — only what the summary strip reads. */
 export interface UsageSummary {
   days: number;

@@ -195,3 +195,15 @@ def test_missing_usage_degrades_to_tokenless_record():
 def test_base_url_reaches_openai_client():
     p = OpenAIProvider(api_key="sk", model="qwen2.5:7b", base_url="http://localhost:8080/v1")
     assert str(p.client.base_url).startswith("http://localhost:8080/v1")
+
+
+def test_answer_uses_context_and_reports_usage():
+    from alexandria_core.telemetry import MeteredLLM, TelemetryStore
+    usage = type("U", (), {"prompt_tokens": 30, "completion_tokens": 12})
+    p = OpenAIProvider(api_key="sk", model="gpt-4o-mini")
+    p.client = _FakeClient("Attention is the mechanism [1].", usage=usage)
+    store = TelemetryStore(":memory:")
+    out = MeteredLLM(p, store).answer("what is attention?", "[1] attention text")
+    assert out == "Attention is the mechanism [1]."
+    row = store.conn.execute("SELECT task, prompt_tokens FROM llm_call").fetchone()
+    assert (row["task"], row["prompt_tokens"]) == ("answer", 30)

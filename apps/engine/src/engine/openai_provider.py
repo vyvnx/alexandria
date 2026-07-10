@@ -135,6 +135,11 @@ def extract_sys(abstraction: str, *, interests: Sequence[str] = (),
         ctx += ("The reader dismissed these as not interesting — never extract "
                 "them or close variants: " + ", ".join(avoid) + ".\n")
     return _EXTRACT_FRAME + ctx + lead + _EXTRACT_JSON
+_ANSWER_SYS = (
+    "Answer the question using ONLY the numbered context passages. Cite the "
+    "passages you use as [n]. If the context is insufficient, say so plainly "
+    "instead of guessing. Be concise."
+)
 _RELATE_SYS = (
     "Given a list of node names and the source text, return typed relations among them as JSON "
     '{"relations":[{"src_name","dst_name","type","evidence"}]}. '
@@ -215,6 +220,13 @@ class OpenAIProvider:
         if m is None:
             return TopicMatch(same_topic=False, reason="parse-error")
         return TopicMatch(m.same_topic, m.canonical_topic, m.reason)
+
+    def answer(self, question: str, context: str) -> str:
+        resp = self._create(messages=[
+            {"role": "system", "content": _ANSWER_SYS},
+            {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {question}"},
+        ])
+        return resp.choices[0].message.content.strip()
 
     def describe_image(self, images: list[bytes], prompt: str) -> str:
         content = [{"type": "text", "text": prompt}]
