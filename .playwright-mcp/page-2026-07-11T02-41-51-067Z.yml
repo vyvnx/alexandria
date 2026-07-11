@@ -1,0 +1,54 @@
+- generic [ref=f2e3]:
+  - banner:
+    - heading "Alexandria" [level=1]
+    - generic: ✦ celestial atlas
+  - generic [ref=f2e5]:
+    - generic [ref=f2e6]:
+      - generic [ref=f2e7]: legend
+      - generic "Legend and filters" [ref=f2e12]:
+        - generic [ref=f2e13]:
+          - text: Stars
+          - generic [ref=f2e14]:
+            - button "source" [pressed] [ref=f2e15]
+            - button "entity" [pressed] [ref=f2e19]
+            - button "concept" [pressed] [ref=f2e23]
+        - generic [ref=f2e27]:
+          - text: Lines
+          - generic [ref=f2e28]:
+            - button "mentions" [pressed] [ref=f2e29]
+            - button "about" [pressed] [ref=f2e33]
+            - button "uses" [pressed] [ref=f2e37]
+            - button "extends" [pressed] [ref=f2e41]
+            - button "contradicts" [pressed] [ref=f2e45]
+            - button "authored-by" [pressed] [ref=f2e49]
+            - button "similar-to" [pressed] [ref=f2e53]
+        - generic [ref=f2e57]:
+          - text: Zones
+          - button "galaxies" [pressed] [ref=f2e59]
+    - generic [ref=f2e63]:
+      - button "Legend" [pressed] [ref=f2e64]
+      - button "Insights" [ref=f2e69]
+  - generic [ref=f2e74]:
+    - button "Search the atlas" [ref=f2e75]:
+      - generic [ref=f2e80]: Search
+      - generic [ref=f2e81]: /
+    - button "Chart a source" [ref=f2e82]:
+      - generic [ref=f2e85]: Add
+      - generic [ref=f2e86]: "N"
+  - generic:
+    - generic:
+      - generic: Charting…
+      - generic:
+        - progressbar
+        - generic: 🚀
+  - complementary [ref=f2e87]:
+    - button [ref=f2e90]
+  - status:
+    - generic: — stars · — lines
+    - link "sources" [ref=f2e94] [cursor=pointer]:
+      - /url: /sources
+    - link "executions" [ref=f2e95] [cursor=pointer]:
+      - /url: /executions
+    - generic:
+      - generic: "60"
+      - text: fps

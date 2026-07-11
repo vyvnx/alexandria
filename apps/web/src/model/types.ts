@@ -146,7 +146,7 @@ export interface TopicRow {
   weight: number;
 }
 
-/* Intelligence layer (D2–D4): insights, graphrag answers, digests. */
+/* Intelligence layer (D2–D3): insights and graphrag answers. */
 export interface InsightNode {
   id: number;
   name: string;
@@ -172,17 +172,6 @@ export interface AskResult {
   answer: string;
   citations: { n: number; node_id: number; name: string }[];
   passages: number;
-}
-
-export interface Digest {
-  days: number;
-  new_sources: number;
-  new_nodes: number;
-  top_new: InsightNode[];
-  trending: { name: string; weight: number }[];
-  resurface: InsightNode[];
-  contradictions: number;
-  narrative?: string;
 }
 
 /* Rollups from `GET /usage` (F2) — only what the summary strip reads. */

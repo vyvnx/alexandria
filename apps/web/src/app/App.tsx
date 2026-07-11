@@ -36,8 +36,8 @@ const DEFAULT_CONFIG: VizConfig = {
   extraction_abstraction: "balanced",
 };
 import { ActionDock } from "../ui/ActionDock";
+import { AtlasMenu } from "../ui/AtlasMenu";
 import { ChartProgress } from "../ui/ChartProgress";
-import { Legend } from "../ui/Legend";
 import { NodeInspector } from "../ui/NodeInspector";
 import { StatusBar } from "../ui/StatusBar";
 
@@ -190,6 +190,11 @@ export function App() {
       <div className="atlas-grid pointer-events-none absolute inset-0 z-0" />
       <div ref={containerRef} className="absolute inset-0 z-0" />
 
+      <header className="masthead-bg pointer-events-none absolute inset-x-0 top-0 z-20 flex items-baseline gap-3 px-[18px] pb-6 pt-3.5">
+        <h1 className="font-display text-[1.2rem] font-medium tracking-[0.01em]">Alexandria</h1>
+        <span className="eyebrow text-[0.62rem]">✦ celestial atlas</span>
+      </header>
+
       {isEmpty && (
         <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center text-center">
           <div className="max-w-[30ch]">
@@ -207,7 +212,7 @@ export function App() {
         </div>
       )}
 
-      <Legend
+      <AtlasMenu
         mask={mask}
         counts={counts}
         onToggleKind={(k: NodeKind) => setMask((m) => toggleKind(m, k))}

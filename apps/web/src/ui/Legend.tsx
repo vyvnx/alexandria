@@ -6,11 +6,10 @@ import { NODE_KINDS, SEMANTIC_EDGE, TYPED_EDGES, type EdgeType, type NodeKind } 
 // palette; the master toggle just needs to read as "dashed boundary".
 const ZONE_SWATCH = "#9db4d8";
 
-/* The legend is the filter — a compact map key pinned near the masthead. Three
-   lean sections (Stars = node kinds, Lines = edge types, Zones = galaxy
-   boundaries) keep controls tidy in a responsive grid; toggling a chip masks
-   that kind / edge-type / the zones overlay without forcing scroll or stealing
-   focus. */
+/* The legend is the filter — the map-key tab of the atlas menu. Three lean
+   sections (Stars = node kinds, Lines = edge types, Zones = galaxy boundaries)
+   keep controls tidy in a two-column grid; toggling a chip masks that kind /
+   edge-type / the zones overlay without forcing scroll or stealing focus. */
 export function Legend({
   mask,
   counts,
@@ -25,54 +24,43 @@ export function Legend({
   onToggleZones: () => void;
 }) {
   return (
-    <div className="pointer-events-auto absolute right-4 top-[4.75rem] z-30 max-w-[min(520px,92vw)] max-md:hidden">
-      <div
-        aria-label="Legend and filters"
-        className="animate-rise rounded-lg border border-line/60 bg-void-2/80 px-3 py-2.5 shadow-[0_18px_34px_-28px_#000] backdrop-blur"
-      >
-        <div className="flex items-center gap-2 text-[0.64rem] uppercase tracking-[0.2em] text-vellum-dim/80">
-          <span className="font-mono">Legend</span>
-          <div className="h-px flex-1 bg-line/60" aria-hidden />
-        </div>
-        <div className="mt-2.5 flex flex-col gap-2.5">
-          <Section title="Stars">
-            {NODE_KINDS.map((k) => (
-              <Chip key={k} on={mask.kinds[k]} count={counts?.kinds[k]} label={k} onClick={() => onToggleKind(k)}>
-                <Swatch color={kindColor(k)} on={mask.kinds[k]} />
-              </Chip>
-            ))}
-          </Section>
-          <Section title="Lines">
-            {TYPED_EDGES.map((t) => (
-              <Chip key={t} on={mask.edgeTypes[t]} count={counts?.edgeTypes[t]} label={t} onClick={() => onToggleEdgeType(t)}>
-                <span className="dash" style={{ color: edgeColor(t) }} />
-              </Chip>
-            ))}
-            <Chip
-              on={mask.edgeTypes[SEMANTIC_EDGE]}
-              count={counts?.edgeTypes[SEMANTIC_EDGE]}
-              label="similar-to"
-              onClick={() => onToggleEdgeType(SEMANTIC_EDGE)}
-            >
-              <span className="dash dash-dotted" style={{ color: edgeColor(SEMANTIC_EDGE) }} />
-            </Chip>
-          </Section>
-          <Section title="Zones">
-            <Chip
-              on={mask.zones}
-              count={counts?.galaxies}
-              label="galaxies"
-              onClick={onToggleZones}
-            >
-              <span
-                className="size-3 flex-none rounded-[3px]"
-                style={{ border: `1.5px dashed ${ZONE_SWATCH}` }}
-                aria-hidden
-              />
-            </Chip>
-          </Section>
-        </div>
-      </div>
+    <div aria-label="Legend and filters" className="flex flex-col gap-2.5">
+      <Section title="Stars">
+        {NODE_KINDS.map((k) => (
+          <Chip key={k} on={mask.kinds[k]} count={counts?.kinds[k]} label={k} onClick={() => onToggleKind(k)}>
+            <Swatch color={kindColor(k)} on={mask.kinds[k]} />
+          </Chip>
+        ))}
+      </Section>
+      <Section title="Lines">
+        {TYPED_EDGES.map((t) => (
+          <Chip key={t} on={mask.edgeTypes[t]} count={counts?.edgeTypes[t]} label={t} onClick={() => onToggleEdgeType(t)}>
+            <span className="dash" style={{ color: edgeColor(t) }} />
+          </Chip>
+        ))}
+        <Chip
+          on={mask.edgeTypes[SEMANTIC_EDGE]}
+          count={counts?.edgeTypes[SEMANTIC_EDGE]}
+          label="similar-to"
+          onClick={() => onToggleEdgeType(SEMANTIC_EDGE)}
+        >
+          <span className="dash dash-dotted" style={{ color: edgeColor(SEMANTIC_EDGE) }} />
+        </Chip>
+      </Section>
+      <Section title="Zones">
+        <Chip
+          on={mask.zones}
+          count={counts?.galaxies}
+          label="galaxies"
+          onClick={onToggleZones}
+        >
+          <span
+            className="size-3 flex-none rounded-[3px]"
+            style={{ border: `1.5px dashed ${ZONE_SWATCH}` }}
+            aria-hidden
+          />
+        </Chip>
+      </Section>
     </div>
   );
 }
@@ -81,7 +69,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div>
       <span className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-vellum-dim/90">{title}</span>
-      <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">{children}</div>
+      <div className="mt-1.5 grid grid-cols-2 gap-1.5">{children}</div>
     </div>
   );
 }

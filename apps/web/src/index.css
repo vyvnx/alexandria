@@ -158,6 +158,35 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-starlight) 35%, transparent);
   }
 
+  /* Atlas-menu spines: vertical tab buttons inside the menu dock.
+     vertical-rl flips the flex axes — "row" stacks icon over label, top to
+     bottom. The dock carries the glass; the active brass pill is a motion
+     shared-layout element that slides between tabs (see AtlasMenu). */
+  .spine {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    writing-mode: vertical-rl;
+    width: 28px;
+    padding: 9px 0 11px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-vellum-dim);
+    transition:
+      color 140ms,
+      background 140ms;
+  }
+  .spine:hover {
+    color: var(--color-vellum);
+    background: color-mix(in srgb, var(--color-void-2) 90%, transparent);
+  }
+  .spine-on {
+    color: var(--color-brass-bright);
+  }
+
   /* Legend marks. */
   .swatch {
     @apply inline-block size-3 flex-none rounded-full;

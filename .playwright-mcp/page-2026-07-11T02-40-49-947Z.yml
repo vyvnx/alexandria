@@ -1,0 +1,135 @@
+- generic [ref=f1e3]:
+  - banner:
+    - heading "Alexandria" [level=1]
+    - generic: ✦ celestial atlas
+  - generic [ref=f1e5]:
+    - generic [ref=f1e6]:
+      - generic [ref=f1e7]: insights
+      - generic [ref=f1e126]:
+        - generic [ref=f1e127]:
+          - textbox "Ask the graph" [active] [ref=f1e128]:
+            - /placeholder: what connects x to y?
+            - text: what connects attention to transformers?
+          - button "ask" [ref=f1e129]
+        - generic [ref=f1e248]:
+          - paragraph [ref=f1e249]: "Fake answer to 'what connects attention to transformers?' based on [1]: [1] TAKE: entity TAKE; adjacent in fake extraction; adjacent in fake extraction;"
+          - paragraph [ref=f1e250]: "[1] TAKE · [2] Attention · [3] sqlite · [4] Note · [5] MY · [6] Note · [7] search · [8] vector · [9] Karpathy · [10] local · [11] enables"
+        - generic [ref=f1e130]:
+          - text: Strongest interests
+          - list [ref=f1e131]:
+            - listitem [ref=f1e132]:
+              - generic "TAKE" [ref=f1e133]: "1"
+              - generic [ref=f1e136]: "0.0806"
+            - listitem [ref=f1e137]:
+              - generic "vector" [ref=f1e138]: "2"
+              - generic [ref=f1e141]: "0.0552"
+            - listitem [ref=f1e142]:
+              - generic "explains" [ref=f1e143]: "3"
+              - generic [ref=f1e146]: "0.0544"
+            - listitem [ref=f1e147]:
+              - generic "local" [ref=f1e148]: "4"
+              - generic [ref=f1e151]: "0.0541"
+            - listitem [ref=f1e152]:
+              - generic "enables" [ref=f1e153]: "5"
+              - generic [ref=f1e156]: "0.0534"
+            - listitem [ref=f1e157]:
+              - generic "transformers" [ref=f1e158]: "6"
+              - generic [ref=f1e161]: "0.0534"
+            - listitem [ref=f1e162]:
+              - generic "power" [ref=f1e163]: "7"
+              - generic [ref=f1e166]: "0.0531"
+            - listitem [ref=f1e167]:
+              - generic "mechanisms" [ref=f1e168]: "8"
+              - generic [ref=f1e171]: "0.0529"
+            - listitem [ref=f1e172]:
+              - generic "Karpathy" [ref=f1e173]: "9"
+              - generic [ref=f1e176]: "0.0525"
+            - listitem [ref=f1e177]:
+              - generic "sqlite" [ref=f1e178]: "10"
+              - generic [ref=f1e181]: "0.0522"
+        - generic [ref=f1e182]:
+          - text: Circling lately
+          - list [ref=f1e183]:
+            - listitem [ref=f1e184]:
+              - generic "MY" [ref=f1e185]
+              - generic [ref=f1e187]: "2.00"
+            - listitem [ref=f1e188]:
+              - generic "TAKE" [ref=f1e189]
+              - generic [ref=f1e191]: "2.00"
+        - generic [ref=f1e192]:
+          - text: Emergent communities
+          - list [ref=f1e193]:
+            - listitem [ref=f1e194]:
+              - generic "TAKE · vector · local" [ref=f1e195]
+              - generic [ref=f1e197]: 7 nodes
+            - listitem [ref=f1e198]:
+              - generic "explains · transformers · power" [ref=f1e199]
+              - generic [ref=f1e201]: 7 nodes
+        - generic [ref=f1e202]:
+          - text: Serendipity bridges
+          - list [ref=f1e203]:
+            - listitem [ref=f1e204]:
+              - generic "TAKE" [ref=f1e205]
+              - generic [ref=f1e207]: "33.47"
+            - listitem [ref=f1e208]:
+              - generic "MY" [ref=f1e209]
+              - generic [ref=f1e211]: "15.53"
+            - listitem [ref=f1e212]:
+              - generic "sqlite" [ref=f1e213]
+              - generic [ref=f1e215]: "3.40"
+            - listitem [ref=f1e216]:
+              - generic "Attention" [ref=f1e217]
+              - generic [ref=f1e219]: "2.73"
+            - listitem [ref=f1e220]:
+              - generic "Karpathy" [ref=f1e221]
+              - generic [ref=f1e223]: "0.50"
+            - listitem [ref=f1e224]:
+              - generic "mechanisms" [ref=f1e225]
+              - generic [ref=f1e227]: "0.50"
+            - listitem [ref=f1e228]:
+              - generic "power" [ref=f1e229]
+              - generic [ref=f1e231]: "0.50"
+            - listitem [ref=f1e232]:
+              - generic "transformers" [ref=f1e233]
+              - generic [ref=f1e235]: "0.50"
+            - listitem [ref=f1e236]:
+              - generic "explains" [ref=f1e237]
+              - generic [ref=f1e239]: "0.50"
+            - listitem [ref=f1e240]:
+              - generic "enables" [ref=f1e241]
+              - generic [ref=f1e243]: "0.50"
+        - generic [ref=f1e244]:
+          - text: Connections you haven't drawn
+          - paragraph [ref=f1e245]: Nothing yet.
+        - generic [ref=f1e246]:
+          - text: Contradiction lint
+          - paragraph [ref=f1e247]: Nothing yet.
+    - generic [ref=f1e63]:
+      - button "Legend" [ref=f1e64]
+      - button "Insights" [pressed] [ref=f1e69]
+  - generic [ref=f1e74]:
+    - button "Search the atlas" [ref=f1e75]:
+      - generic [ref=f1e80]: Search
+      - generic [ref=f1e81]: /
+    - button "Chart a source" [ref=f1e82]:
+      - generic [ref=f1e85]: Add
+      - generic [ref=f1e86]: "N"
+  - generic:
+    - generic:
+      - generic: Charting…
+      - generic:
+        - progressbar
+        - generic: 🚀
+  - complementary [ref=f1e87]:
+    - button [ref=f1e90]
+  - status:
+    - generic: 16 stars · 29 lines
+    - link "sources" [ref=f1e94] [cursor=pointer]:
+      - /url: /sources
+    - link "executions" [ref=f1e95] [cursor=pointer]:
+      - /url: /executions
+    - generic: "llm: fake"
+    - generic: "vec: on"
+    - generic:
+      - generic: "60"
+      - text: fps

@@ -3,22 +3,37 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./app/App";
 import { ExecutionsPage } from "./ui/ExecutionsPage";
-import { InsightsPage } from "./ui/InsightsPage";
 import { SourcesPage } from "./ui/SourcesPage";
 import "./index.css";
 
-// hash routing: a few pages, no router dependency. `#/executions` is the cost
-// panel, `#/sources` the intake registry; anything else is the atlas.
+// path routing via the History API: a few pages, no router dependency.
+// `/executions` is the cost panel, `/sources` the intake registry; anything
+// else is the atlas. Internal links are plain <a href="/...">; the click
+// listener below intercepts same-origin clicks so navigation stays client-side
+// (the server still serves index.html for these paths directly, see app.py).
 function Root() {
-  const [hash, setHash] = useState(window.location.hash);
+  const [path, setPath] = useState(window.location.pathname);
   useEffect(() => {
-    const onHash = () => setHash(window.location.hash);
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
-  if (hash.startsWith("#/executions")) return <ExecutionsPage />;
-  if (hash.startsWith("#/sources")) return <SourcesPage />;
-  if (hash.startsWith("#/insights")) return <InsightsPage />;
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as HTMLElement).closest("a");
+      if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+      const href = a.getAttribute("href");
+      if (!href || !href.startsWith("/") || href.startsWith("//")) return;
+      e.preventDefault();
+      history.pushState(null, "", href);
+      setPath(href);
+    }
+    window.addEventListener("click", onClick);
+    return () => window.removeEventListener("click", onClick);
+  }, []);
+  if (path.startsWith("/executions")) return <ExecutionsPage />;
+  if (path.startsWith("/sources")) return <SourcesPage />;
   return <App />;
 }
 

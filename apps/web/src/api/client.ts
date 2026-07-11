@@ -1,11 +1,11 @@
 /* Typed fetch client. Talks only to the JSON API over same-origin relative
-   paths (vite proxies these to FastAPI in dev; FastAPI serves us at `/` in
-   prod). Every call funnels through `request` so error handling is uniform. */
+   paths, all under `/api` (vite proxies it to FastAPI in dev; FastAPI serves
+   us at `/` in prod). Every call funnels through `request`, which adds the
+   prefix and keeps error handling uniform. */
 
 import type {
   Abstraction,
   AskResult,
-  Digest,
   ExecutionRow,
   FeedRow,
   Insights,
@@ -32,7 +32,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(path, {
+    res = await fetch(`/api${path}`, {
       ...init,
       headers: { "Content-Type": "application/json", ...init?.headers },
     });
@@ -91,11 +91,9 @@ export const api = {
   /** Cost rollups for the summary strip. */
   usage: (days = 30) => request<UsageSummary>(`/usage?days=${days}`),
 
-  /** Intelligence layer (D2–D4). */
+  /** Intelligence layer (D2–D3). */
   insights: () => request<Insights>("/insights"),
   ask: (q: string) => request<AskResult>(`/ask?q=${encodeURIComponent(q)}`),
-  digest: (narrative = false) =>
-    request<Digest>(`/digest${narrative ? "?narrative=true" : ""}`),
 
   /** Curated intake registry (A3). */
   feeds: () => request<FeedRow[]>("/feeds"),

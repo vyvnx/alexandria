@@ -2,27 +2,18 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// The SPA talks only to the JSON API with same-origin relative paths
-// (e.g. `/graph`). In production FastAPI serves this build at `/`, so the
-// paths resolve directly. In dev we proxy the API routes to the FastAPI
-// process (apps/api, port 8000) so the same relative paths just work.
-//
-// IMPORTANT: proxy keys are *prefix* matches. `/node` (the GET /node/{id}
-// route) must be written as `/node/` — bare `/node` also matches Vite's own
-// `/node_modules/.vite/deps/*.js` requests and forwards React itself to the
-// backend (→ 404 → blank page). Keep these as specific as possible.
-const API_ROUTES = ["/ingest", "/graph", "/search", "/node/", "/healthz", "/config",
-                    "/executions", "/usage", "/feeds", "/topics",
-                    "/insights", "/ask", "/digest"];
+// The SPA talks only to the JSON API with same-origin relative paths, all
+// under `/api`. In production FastAPI serves this build at `/`, so the paths
+// resolve directly. In dev the single `/api` proxy forwards them to the
+// FastAPI process (apps/http, port 8000); page paths (`/sources`,
+// `/executions`) never collide with it, so Vite serves the SPA shell locally.
 const API_TARGET = process.env.ALEX_API_URL ?? "http://localhost:8000";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
-    proxy: Object.fromEntries(
-      API_ROUTES.map((route) => [route, { target: API_TARGET, changeOrigin: true }]),
-    ),
+    proxy: { "/api": { target: API_TARGET, changeOrigin: true } },
   },
   build: {
     outDir: "dist",

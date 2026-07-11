@@ -1,0 +1,14 @@
+- generic [ref=f2e4]:
+  - banner [ref=f2e5]:
+    - heading "Insights" [level=1] [ref=f2e6]
+    - link "← back to the atlas" [ref=f2e7] [cursor=pointer]:
+      - /url: /
+  - alert [ref=f2e8]: Unexpected token '<', "<!doctype "... is not valid JSON
+  - generic [ref=f2e9]:
+    - heading "Ask the graph" [level=2] [ref=f2e10]
+    - generic [ref=f2e11]:
+      - textbox "what connects X to Y?" [ref=f2e12]
+      - button "ask" [ref=f2e13]
+  - generic [ref=f2e14]:
+    - heading "Digest" [level=2] [ref=f2e15]
+    - button "what did the graph learn this week?" [ref=f2e17]

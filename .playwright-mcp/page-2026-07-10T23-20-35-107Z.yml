@@ -1,0 +1,7 @@
+- generic [ref=f6e115]:
+  - banner [ref=f6e116]:
+    - heading "Executions" [level=1] [ref=f6e117]
+    - link "← back to the atlas" [ref=f6e118] [cursor=pointer]:
+      - /url: /
+  - paragraph [ref=f6e119]: "last 30 days: $0 · 0 calls · — tokens"
+  - paragraph [ref=f6e120]: Nothing charted yet — ingests will land here with their cost.

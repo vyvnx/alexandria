@@ -31,7 +31,7 @@ export function ExecutionsPage() {
         <header className="mb-5 flex items-baseline gap-4">
           <h1 className="font-display text-[1.6rem] font-medium">Executions</h1>
           <a
-            href="#"
+            href="/"
             className="text-[0.82rem] text-vellum-dim hover:text-vellum"
           >
             ← back to the atlas

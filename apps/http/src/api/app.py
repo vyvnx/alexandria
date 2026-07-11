@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -17,7 +18,6 @@ from alexandria_core.graph.store import GraphStore
 from alexandria_core.ingest.loaders import load_pdf
 from alexandria_core.ingest.pipeline import ingest
 from alexandria_core.ask import ask as graphrag_ask
-from alexandria_core.digest import build_digest, render_digest
 from alexandria_core.insights import compute_insights
 from alexandria_core.intake import IntakeRegistry, poll_feeds
 from alexandria_core.logging_config import configure_logging, get_logger
@@ -173,14 +173,18 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     app.state.telemetry = telemetry
     app.state.registry = registry
 
+    # every JSON route lives under /api; page paths (`/`, `/sources`,
+    # `/executions`) belong to the SPA, served at the bottom.
+    api = APIRouter(prefix="/api")
+
     def _node_dict(n):
         return {"id": n.id, "kind": n.kind, "name": n.name, "data": n.data}
 
-    @app.get("/healthz")
+    @api.get("/healthz")
     def healthz():
         return {"ok": True, "vec": store.vec_available, "llm": settings.llm}
 
-    @app.get("/config")
+    @api.get("/config")
     def config():
         # The client-facing "where viz config lives" seam — a dedicated endpoint
         # (health stays health). The browser reads these on load to size stars
@@ -194,7 +198,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             "extraction_abstraction": s.extraction_abstraction,
         }
 
-    @app.post("/ingest")
+    @api.post("/ingest")
     def do_ingest(body: IngestBody):
         if not body.url and not body.note:
             raise HTTPException(400, "provide url and/or note")
@@ -202,7 +206,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         wake.set()
         return {"job_id": str(job_id)}
 
-    @app.post("/ingest/file")
+    @api.post("/ingest/file")
     async def do_ingest_file(file: UploadFile = File(...),
                              abstraction: str | None = Form(None)):
         if abstraction not in (None, "abstract", "balanced", "exhaustive"):
@@ -225,7 +229,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     _JOB_STATUS = {"queued": "running", "running": "running",
                    "succeeded": "done", "failed": "failed"}
 
-    @app.get("/ingest/{job_id}")
+    @api.get("/ingest/{job_id}")
     def ingest_status(job_id: str):
         row = telemetry.get_execution(int(job_id)) if job_id.isdigit() else None
         if row is None:
@@ -233,32 +237,24 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         return {"status": _JOB_STATUS[row["status"]], "stage": row["stage"],
                 "result": row["result"], "error": row["error"]}
 
-    @app.get("/executions")
+    @api.get("/executions")
     def executions(limit: int = 50):
         # cost/status ledger for the /executions panel (F1)
         return telemetry.list_executions(limit)
 
-    @app.get("/insights")
+    @api.get("/insights")
     def insights():
         # structural insights over the graph tier (D2), computed on demand
         return compute_insights(store, settings)
 
-    @app.get("/ask")
+    @api.get("/ask")
     def ask_endpoint(q: str = ""):
         # graphrag q&a (D3): cited answer from a connected subgraph
         if not q.strip():
             raise HTTPException(400, "provide a question via ?q=")
         return graphrag_ask(store, embedder, llm, settings, q)
 
-    @app.get("/digest")
-    def digest(days: int = 7, narrative: bool = False):
-        # weekly digest (D4); llm narrative is opt-in so a page load spends nothing
-        d = build_digest(store, settings, days=days)
-        if narrative:
-            d["narrative"] = llm.summarize(render_digest(d))
-        return d
-
-    @app.get("/usage")
+    @api.get("/usage")
     def usage(days: int = 30):
         # where the money goes (F2): totals + per-day/task/source rollups
         u = telemetry.usage(days)
@@ -271,11 +267,11 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         }
         return u
 
-    @app.get("/feeds")
+    @api.get("/feeds")
     def list_feeds():
         return registry.list_feeds()
 
-    @app.post("/feeds")
+    @api.post("/feeds")
     def add_feed(body: FeedBody):
         try:
             fid = registry.add_feed(body.url, cadence_minutes=body.cadence_minutes)
@@ -283,14 +279,14 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             raise HTTPException(409, "feed already registered")
         return {"id": fid}
 
-    @app.delete("/feeds/{feed_id}")
+    @api.delete("/feeds/{feed_id}")
     def remove_feed(feed_id: int):
         if not registry.feed_exists(feed_id):
             raise HTTPException(404, "unknown feed")
         registry.remove_feed(feed_id)
         return {"removed": feed_id}
 
-    @app.post("/feeds/{feed_id}/poll")
+    @api.post("/feeds/{feed_id}/poll")
     def poll_feed(feed_id: int):
         if not registry.feed_exists(feed_id):
             raise HTTPException(404, "unknown feed")
@@ -298,11 +294,11 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         wake.set()
         return {"polling": feed_id}
 
-    @app.get("/topics")
+    @api.get("/topics")
     def list_topics():
         return registry.list_topics()
 
-    @app.post("/topics")
+    @api.post("/topics")
     def add_topic(body: TopicBody):
         try:
             tid = registry.add_topic(body.name, weight=body.weight)
@@ -310,14 +306,14 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
             raise HTTPException(409, "topic already exists")
         return {"id": tid}
 
-    @app.delete("/topics/{topic_id}")
+    @api.delete("/topics/{topic_id}")
     def remove_topic(topic_id: int):
         if not registry.topic_exists(topic_id):
             raise HTTPException(404, "unknown topic")
         registry.remove_topic(topic_id)
         return {"removed": topic_id}
 
-    @app.get("/graph")
+    @api.get("/graph")
     def graph(node_id: int | None = None, k: int = 2):
         if node_id is not None:
             ids = set(store.reach(node_id, k))
@@ -334,7 +330,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
                       for e in edges],
         }
 
-    @app.get("/search")
+    @api.get("/search")
     def search(q: str):
         results = []
         if store.vec_available:
@@ -353,7 +349,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
                  "vector" if store.vec_available else "name-match")
         return results
 
-    @app.get("/node/{node_id}")
+    @api.get("/node/{node_id}")
     def node_detail(node_id: int):
         n = store.get_node(node_id)
         if not n:
@@ -368,7 +364,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         return {"node": _node_dict(n), "source": store.get_source(node_id),
                 "neighbors": neighbors}
 
-    @app.post("/node/{node_id}/dismiss")
+    @api.post("/node/{node_id}/dismiss")
     def dismiss_node(node_id: int):
         n = store.get_node(node_id)
         if not n:
@@ -379,10 +375,19 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         log.info("dismissed node %d %r — topic suppressed in future ingests", node_id, name)
         return {"dismissed": name}
 
+    app.include_router(api)
+
     # serve the built SPA if present (apps/web/dist) — mounted last so API routes win.
     # The frontend is built later; until then this mount is simply skipped.
     dist = Path(__file__).resolve().parents[3] / "web" / "dist"
     if dist.is_dir():
+        # client-side page paths (path routing, no #): a StaticFiles mount only
+        # serves index.html for `/`, so each page path gets an explicit shell route
+        @app.get("/sources")
+        @app.get("/executions")
+        def spa_page():
+            return FileResponse(dist / "index.html")
+
         app.mount("/", StaticFiles(directory=str(dist), html=True), name="spa")
 
     return app

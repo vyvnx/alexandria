@@ -24,6 +24,9 @@ dist/
 # monorepo task runner
 .turbo/
 
+# superpowers brainstorm mockups (ephemeral)
+.superpowers/
+
 # os / editor
 .DS_Store
 *.swp
