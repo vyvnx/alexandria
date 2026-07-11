@@ -82,7 +82,8 @@ export function ActionDock({
 
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
-  const [abstraction, setAbstraction] = useState<Abstraction>(defaultAbstraction);
+  const [abstraction, setAbstraction] =
+    useState<Abstraction>(defaultAbstraction);
   const [visual, setVisual] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,7 +114,13 @@ export function ActionDock({
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      )
+        return;
       if (e.key === "/") {
         e.preventDefault();
         setMode("search");
@@ -149,7 +156,8 @@ export function ActionDock({
   useEffect(() => {
     if (mode === "none") return;
     const onDoc = (e: MouseEvent) => {
-      if (dockRef.current && !dockRef.current.contains(e.target as Node)) setMode("none");
+      if (dockRef.current && !dockRef.current.contains(e.target as Node))
+        setMode("none");
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -205,7 +213,11 @@ export function ActionDock({
     } catch (err) {
       // Panel is gone — surface the failure as a toast and keep the inputs so
       // reopening Add lets the user retry without retyping.
-      onIngestError?.(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      onIngestError?.(
+        err instanceof ApiError
+          ? err.message
+          : "Something went wrong. Try again.",
+      );
     } finally {
       setBusy(false);
       onStage?.(null);
@@ -222,7 +234,10 @@ export function ActionDock({
       {mode === "search" && (
         <div className="animate-reveal w-[min(380px,90vw)] origin-bottom-right overflow-hidden rounded-lg border border-line/60 bg-void-2/90 shadow-[0_20px_40px_-30px_#000]">
           <div className="flex items-center gap-2 border-b border-line/60 px-3 py-2.5">
-            <Search className="size-4 flex-none text-brass" strokeWidth={1.65} />
+            <Search
+              className="size-4 flex-none text-brass"
+              strokeWidth={1.65}
+            />
             <input
               ref={searchRef}
               type="search"
@@ -235,7 +250,10 @@ export function ActionDock({
             />
           </div>
           {hits.length > 0 && (
-            <ul role="listbox" className="thin-scrollbar grid max-h-[36vh] gap-1.5 overflow-y-auto p-2">
+            <ul
+              role="listbox"
+              className="thin-scrollbar grid max-h-[36vh] gap-1.5 overflow-y-auto p-2"
+            >
               {hits.map((h, i) => (
                 <li
                   key={h.id}
@@ -254,10 +272,15 @@ export function ActionDock({
                   >
                     <span
                       className="swatch size-2"
-                      style={{ color: kindColor(h.kind), background: kindColor(h.kind) }}
+                      style={{
+                        color: kindColor(h.kind),
+                        background: kindColor(h.kind),
+                      }}
                     />
                   </span>
-                  <span className="flex-1 truncate text-[0.82rem] text-vellum">{h.name}</span>
+                  <span className="flex-1 truncate text-[0.82rem] text-vellum">
+                    {h.name}
+                  </span>
                   <span className="rounded bg-void-2/70 px-1.5 py-0.5 font-mono text-[0.68rem] text-vellum-dim/90">
                     {h.score != null ? h.score.toFixed(2) : h.kind}
                   </span>
@@ -277,7 +300,9 @@ export function ActionDock({
           <div className="flex items-start justify-between">
             <div>
               <span className="eyebrow">Chart a source</span>
-              <h2 className="font-display mt-0.5 text-[1.35rem] font-medium">Add to the atlas</h2>
+              <h2 className="font-display mt-0.5 text-[1.35rem] font-medium">
+                Add to the atlas
+              </h2>
             </div>
             <button
               type="button"
@@ -290,7 +315,9 @@ export function ActionDock({
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className="font-mono text-[0.72rem] tracking-[0.12em] text-vellum-dim uppercase">Link</span>
+            <span className="font-mono text-[0.72rem] tracking-[0.12em] text-vellum-dim uppercase">
+              Link
+            </span>
             <input
               ref={urlRef}
               className="control"
@@ -303,7 +330,9 @@ export function ActionDock({
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="font-mono text-[0.72rem] tracking-[0.12em] text-vellum-dim uppercase">Your take</span>
+            <span className="font-mono text-[0.72rem] tracking-[0.12em] text-vellum-dim uppercase">
+              Your take
+            </span>
             <textarea
               className="control min-h-[3.2rem] resize-y leading-relaxed"
               rows={3}
@@ -326,14 +355,18 @@ export function ActionDock({
               step={1}
               value={ABSTRACTION_LEVELS.indexOf(abstraction)}
               aria-label="How much to pull from this source"
-              onChange={(e) => setAbstraction(ABSTRACTION_LEVELS[Number(e.target.value)])}
+              onChange={(e) =>
+                setAbstraction(ABSTRACTION_LEVELS[Number(e.target.value)])
+              }
             />
             <div className="flex justify-between">
               {ABSTRACTION_LEVELS.map((lvl) => (
                 <span
                   key={lvl}
                   className={`font-mono text-[0.62rem] tracking-[0.08em] uppercase transition-colors duration-200 ${
-                    lvl === abstraction ? "text-brass-bright" : "text-vellum-dim/60"
+                    lvl === abstraction
+                      ? "text-brass-bright"
+                      : "text-vellum-dim/60"
                   }`}
                 >
                   {ABSTRACTION_META[lvl].tick}
@@ -341,7 +374,10 @@ export function ActionDock({
               ))}
             </div>
             {/* keyed so the caption gently re-fades each time the level changes */}
-            <p key={abstraction} className="animate-fade text-[0.74rem] leading-snug text-vellum-dim">
+            <p
+              key={abstraction}
+              className="animate-fade text-[0.74rem] leading-snug text-vellum-dim"
+            >
               {ABSTRACTION_META[abstraction].hint}
             </p>
           </div>
@@ -363,7 +399,9 @@ export function ActionDock({
               aria-label="Capture visuals"
               onClick={() => setVisual((v) => !v)}
               className={`relative h-5 w-9 flex-none rounded-full border transition ${
-                visual ? "border-brass/60 bg-brass/30" : "border-line/60 bg-void-2/80"
+                visual
+                  ? "border-brass/60 bg-brass/30"
+                  : "border-line/60 bg-void-2/80"
               }`}
             >
               <span
@@ -380,10 +418,17 @@ export function ActionDock({
             </p>
           )}
 
-          <button type="submit" className="btn btn-primary text-vellum" disabled={busy}>
+          <button
+            type="submit"
+            className="btn btn-primary text-vellum"
+            disabled={busy}
+          >
             {busy ? (
               <>
-                <span className="size-3.5 animate-spin rounded-full border-2 border-brass/30 border-t-brass-bright" aria-hidden />
+                <span
+                  className="size-3.5 animate-spin rounded-full border-2 border-brass/30 border-t-brass-bright"
+                  aria-hidden
+                />
                 Reading…
               </>
             ) : (
@@ -441,7 +486,7 @@ function DockButton({
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[0.78rem] font-medium transition focus-visible:ring-2 focus-visible:ring-starlight focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`flex items-center gap-2 rounded-md border px-2 py-1 text-[0.78rem] font-medium transition focus-visible:ring-2 focus-visible:ring-starlight focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${
         active
           ? "border-brass/50 bg-brass/15 text-vellum"
           : "border-transparent text-vellum-dim hover:border-line/60 hover:bg-void-2/90 hover:text-vellum"
@@ -449,14 +494,16 @@ function DockButton({
     >
       <span
         className={`grid size-7 flex-none place-items-center rounded-sm transition ${
-          active ? "bg-void-2/70 text-brass-bright" : "bg-transparent text-brass"
+          active
+            ? "bg-void-2/70 text-brass-bright"
+            : "bg-transparent text-brass"
         }`}
       >
         <Icon className="size-4" strokeWidth={1.7} />
       </span>
       <span className="truncate text-[0.82rem] leading-none">{label}</span>
       {shortcut && (
-        <kbd className="ml-1 hidden rounded border border-line/60 px-1.5 py-0.5 font-mono text-[0.62rem] uppercase tracking-[0.08em] text-vellum-dim sm:inline">
+        <kbd className="ml-1 hidden rounded border border-line/60 px-1.5 py-0.5 font-mono text-xs uppercase tracking-[0.08em] text-vellum-dim sm:inline">
           {shortcut}
         </kbd>
       )}

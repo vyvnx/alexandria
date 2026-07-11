@@ -46,7 +46,7 @@ export function AtlasMenu({
   }
 
   return (
-    <div className="pointer-events-auto absolute right-4 top-[4.75rem] z-30 flex items-start gap-2 max-md:hidden">
+    <div className="pointer-events-auto absolute right-4 top-4 z-30 flex items-start gap-2 max-md:hidden">
       <motion.div
         aria-hidden={!open}
         initial={false}
