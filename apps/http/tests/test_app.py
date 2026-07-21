@@ -9,6 +9,7 @@ from alexandria_core.intake import IntakeRegistry
 from alexandria_core.providers.fake import FakeLLM, FakeEmbedder
 from alexandria_core.config import Settings
 from alexandria_core.graph.models import KIND_CONCEPT
+from alexandria_core.telemetry import TelemetryStore
 
 
 @pytest.fixture
@@ -304,11 +305,11 @@ class _PricedLLM(FakeLLM):
 def _budget_client(**settings_kw):
     store = GraphStore(":memory:")
     store.init_schema()
+    telemetry = TelemetryStore(":memory:", price_in_per_mtok=1.0)
     app = create_app(store=store, llm=_PricedLLM(), embedder=FakeEmbedder(),
-                     registry=IntakeRegistry(":memory:"),
+                     registry=IntakeRegistry(":memory:"), telemetry=telemetry,
                      settings=Settings(_env_file=None, llm="fake",
-                                       executions_db_path=":memory:",
-                                       price_in_per_mtok=1.0, **settings_kw))
+                                       executions_db_path=":memory:", **settings_kw))
     return TestClient(app)
 
 
@@ -457,3 +458,49 @@ def test_dismiss_source_node_400(client):
     c, _ = client
     sid = _ingest(c, note="Graphs model relationships.")["source_id"]
     assert c.post(f"/api/node/{sid}/dismiss").status_code == 400
+
+
+# ---- positions + bbox/LOD (server-side positions spec) ----
+
+def test_positions_roundtrip_on_graph_wire(client):
+    c, store = client
+    a = store.add_node(KIND_CONCEPT, "a")
+    b = store.add_node(KIND_CONCEPT, "b")
+    r = c.post("/api/graph/positions", json={"positions": {str(a): [1.234, -5.678]}})
+    assert r.status_code == 200 and r.json()["saved"] == 1
+    nodes = {n["id"]: n for n in c.get("/api/graph").json()["nodes"]}
+    assert nodes[a]["x"] == 1.23 and nodes[a]["y"] == -5.68  # rounded to 2dp
+    assert "x" not in nodes[b]  # unplaced ships no position
+
+def test_positions_rejects_malformed_body(client):
+    c, _ = client
+    assert c.post("/api/graph/positions",
+                  json={"positions": {"1": [1.0]}}).status_code == 422
+
+def test_graph_bbox_keeps_unplaced_nodes(client):
+    c, store = client
+    inside = store.add_node(KIND_CONCEPT, "inside")
+    outside = store.add_node(KIND_CONCEPT, "outside")
+    unplaced = store.add_node(KIND_CONCEPT, "unplaced")
+    store.set_positions({inside: (1.0, 1.0), outside: (99.0, 99.0)})
+    ids = {n["id"] for n in
+           c.get("/api/graph", params={"bbox": "0,0,10,10"}).json()["nodes"]}
+    assert ids == {inside, unplaced}
+
+def test_graph_bbox_malformed_422(client):
+    c, _ = client
+    assert c.get("/api/graph", params={"bbox": "1,2,3"}).status_code == 422
+
+def test_graph_lod_caps_to_most_connected(client):
+    c, store = client
+    hub = store.add_node(KIND_CONCEPT, "hub")
+    spokes = [store.add_node(KIND_CONCEPT, f"s{i}") for i in range(3)]
+    lone = store.add_node(KIND_CONCEPT, "lone")
+    for s in spokes:
+        store.add_edge(hub, s, "uses")
+    g = c.get("/api/graph", params={"lod": 4}).json()
+    ids = {n["id"] for n in g["nodes"]}
+    assert hub in ids and lone not in ids  # hub (deg 3) kept, degree-0 dropped
+    # edges only among surviving nodes
+    assert all(e["src"] in ids and e["dst"] in ids for e in g["edges"])
+    assert c.get("/api/graph", params={"lod": 0}).status_code == 422

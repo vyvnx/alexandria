@@ -23,6 +23,11 @@ from .providers.base import Extraction, Relation, TopicMatch, Vector
 
 log = get_logger("telemetry")
 
+# $ per 1M tokens for the configured model (gpt-4o-mini); 0 ⇒ cost reported
+# as tokens only. Becomes a per-model table when cost-aware routing (F4) lands.
+PRICE_IN_PER_MTOK = 0.15
+PRICE_OUT_PER_MTOK = 0.60
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS execution (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,8 +94,8 @@ class TelemetryStore:
     """SQLite ledger of executions and per-call telemetry. Embedded, no daemon;
     shared across the request threads and the ingest worker (lock-serialized)."""
 
-    def __init__(self, db_path: str, *, price_in_per_mtok: float = 0.0,
-                 price_out_per_mtok: float = 0.0):
+    def __init__(self, db_path: str, *, price_in_per_mtok: float = PRICE_IN_PER_MTOK,
+                 price_out_per_mtok: float = PRICE_OUT_PER_MTOK):
         if db_path != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(db_path, check_same_thread=False)

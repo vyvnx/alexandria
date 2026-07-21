@@ -31,6 +31,9 @@ export interface EngineEvents {
   /** A node click carries its id; a click on empty sky carries null (deselect). */
   click: { id: NodeId | null };
   cameraChange: { ratio: number };
+  /** A layout actually ran and came to rest — final positions, ready to
+      persist. Not emitted when the engine skips layout (everything placed). */
+  settled: { positions: Record<NodeId, { x: number; y: number }> };
 }
 export type EngineEventName = keyof EngineEvents;
 export type EngineEventHandler<E extends EngineEventName = EngineEventName> = (

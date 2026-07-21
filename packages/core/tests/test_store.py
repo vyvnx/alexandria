@@ -168,3 +168,32 @@ def test_init_schema_migrates_pre_hash_sources_table():
     cols = [r[1] for r in s.conn.execute("PRAGMA table_info(sources)")]
     assert "content_hash" in cols
     s.close()
+
+
+def test_set_positions_roundtrip_rounded(store):
+    a = store.add_node(KIND_CONCEPT, "a")
+    b = store.add_node(KIND_CONCEPT, "b")
+    assert store.get_node(a).x is None  # unplaced until a layout settles
+    saved = store.set_positions({a: (1.23456, -7.891), b: (0.0, 2.5)})
+    assert saved == 2
+    n = store.get_node(a)
+    assert (n.x, n.y) == (1.23, -7.89)
+
+
+def test_set_positions_ignores_unknown_ids(store):
+    a = store.add_node(KIND_CONCEPT, "a")
+    saved = store.set_positions({a: (1.0, 1.0), 9999: (2.0, 2.0)})
+    assert saved == 1
+    assert store.get_node(a).x == 1.0
+
+
+def test_init_schema_migrates_pre_position_nodes_table():
+    s = GraphStore(":memory:")
+    # simulate a db created before the position columns existed
+    s.conn.execute(
+        "CREATE TABLE nodes (id INTEGER PRIMARY KEY, kind TEXT NOT NULL,"
+        " name TEXT NOT NULL, data TEXT, created_at TEXT NOT NULL)")
+    s.init_schema()
+    cols = [r[1] for r in s.conn.execute("PRAGMA table_info(nodes)")]
+    assert "x" in cols and "y" in cols
+    s.close()

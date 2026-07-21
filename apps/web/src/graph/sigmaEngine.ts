@@ -13,10 +13,11 @@ import FA2Layout from "graphology-layout-forceatlas2/worker";
 import type { Attributes } from "graphology-types";
 import Sigma from "sigma";
 import type { Settings } from "sigma/settings";
-import type { EdgeDisplayData, NodeDisplayData } from "sigma/types";
+import type { CameraState, EdgeDisplayData, NodeDisplayData } from "sigma/types";
 
 import type { FilterMask } from "../model/filters";
 import type { GalaxyMap } from "../model/galaxies";
+import { carryPositions } from "../model/graph";
 import type { EdgeId, NodeId } from "../model/types";
 import { centroid, convexHull, padHull, type Point } from "./hull";
 import { drawHover } from "./labels";
@@ -99,6 +100,9 @@ export class SigmaEngine implements GraphEngine {
   private fa2?: FA2Layout;
   private animate = true;
   private settleTimer?: ReturnType<typeof setTimeout>;
+  // true while a layout run's final positions haven't been reported yet —
+  // gates the `settled` emit so skipped layouts never phantom-save
+  private layoutRan = false;
 
   // imperative interaction state — the whole point of this class
   private hovered: NodeId | null = null;
@@ -131,6 +135,8 @@ export class SigmaEngine implements GraphEngine {
   }
 
   setData(graph: Graph): void {
+    // updates nudge, never re-scramble: surviving stars keep their settled spots
+    if (this.graph) carryPositions(this.graph, graph);
     this.graph = graph;
     this.mount();
   }
@@ -138,14 +144,23 @@ export class SigmaEngine implements GraphEngine {
   /** (Re)create the Sigma renderer once both a container and a graph exist. */
   private mount(): void {
     if (!this.container || !this.graph) return;
+    // the user's pan/zoom survives a data refresh
+    let camera: CameraState | undefined;
     if (this.sigma) {
-      this.stopLayout();
+      camera = this.sigma.getCamera().getState();
+      // Tear down without stopLayout()'s refresh(): this.graph already points at
+      // the new graph, so refreshing the doomed Sigma runs the edge reducer over
+      // the OLD graph's edges and throws on any the new graph dropped (dismiss).
+      // fa2.kill() below already stops the worker.
+      clearTimeout(this.settleTimer);
+      this.layoutRan = false; // an interrupted settle is never reported
       this.fa2?.kill();
       this.fa2 = undefined;
       this.sigma.kill();
       this.sigma = undefined;
     }
     this.sigma = new Sigma(this.graph, this.container, this.buildSettings());
+    if (camera) this.sigma.getCamera().setState(camera);
     this.wireEvents();
     this.createOverlay();
     // Redraw zone boundaries after every Sigma render, so hulls track nodes
@@ -464,6 +479,14 @@ export class SigmaEngine implements GraphEngine {
   startLayout(): void {
     const g = this.graph;
     if (!g || g.order === 0) return;
+    // Everything already has a settled position (server-side or carried from
+    // the previous graph) → no simulation at all: the sky appears as it was
+    // left. Only unplaced newcomers are worth a layout run.
+    if (g.findNode((_n, attrs) => !attrs.placed) == null) {
+      this.refresh();
+      return;
+    }
+    this.layoutRan = true;
     if (this.animate) {
       if (!this.fa2) {
         const settings = forceAtlas2.inferSettings(g);
@@ -479,6 +502,7 @@ export class SigmaEngine implements GraphEngine {
       // Reduced motion: jump straight to a settled layout, no visible churn.
       forceAtlas2.assign(g, { iterations: 200, settings: forceAtlas2.inferSettings(g) });
       this.sigma?.refresh();
+      this.emitSettled();
     }
   }
 
@@ -490,6 +514,21 @@ export class SigmaEngine implements GraphEngine {
     // last spread and the boundary clips members that drifted outside it.
     this.galaxiesDirty = true;
     this.refresh();
+    this.emitSettled();
+  }
+
+  /** Report a finished layout run exactly once: every node is now placed, and
+      the final positions go out for persistence. No-op if no layout ran. */
+  private emitSettled(): void {
+    const g = this.graph;
+    if (!this.layoutRan || !g) return;
+    this.layoutRan = false;
+    const positions: Record<NodeId, { x: number; y: number }> = {};
+    g.forEachNode((node, attrs) => {
+      g.setNodeAttribute(node, "placed", true);
+      positions[node] = { x: attrs.x as number, y: attrs.y as number };
+    });
+    this.emit("settled", { positions });
   }
 
   on<E extends EngineEventName>(event: E, cb: EngineEventHandler<E>): void {

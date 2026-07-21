@@ -68,6 +68,14 @@ export const api = {
 
   node: (id: number) => request<NodeDetail>(`/node/${id}`),
 
+  /** Write settled layout positions back so the sky persists across reloads.
+      Phase-0 scaffolding — retires when the backend precomputes layout. */
+  savePositions: (positions: Record<number, [number, number]>) =>
+    request<{ saved: number }>("/graph/positions", {
+      method: "POST",
+      body: JSON.stringify({ positions }),
+    }),
+
   /** Dismiss a node as "not interested": deletes it and suppresses the topic
       in future ingests. */
   dismissNode: (id: number) =>

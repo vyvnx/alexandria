@@ -11,14 +11,19 @@ import { createEngine, hasWebGL2 } from "../graph/createEngine";
 import type { GraphEngine } from "../graph/engine";
 import type { NodeId } from "../model/types";
 
-export function useGraphEngine(onSelect: (id: NodeId | null) => void) {
+export function useGraphEngine(
+  onSelect: (id: NodeId | null) => void,
+  onSettled?: (positions: Record<NodeId, { x: number; y: number }>) => void,
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<GraphEngine | null>(null);
   const [webgl2] = useState(() => hasWebGL2());
 
-  // Keep the latest callback without re-running the mount effect.
+  // Keep the latest callbacks without re-running the mount effect.
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onSettledRef = useRef(onSettled);
+  onSettledRef.current = onSettled;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -29,6 +34,7 @@ export function useGraphEngine(onSelect: (id: NodeId | null) => void) {
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     engine.init(container, { animateLayout: !reduced });
     engine.on("click", ({ id }) => onSelectRef.current(id));
+    engine.on("settled", ({ positions }) => onSettledRef.current?.(positions));
     engineRef.current = engine;
 
     return () => {

@@ -81,7 +81,8 @@ def test_cost_computed_when_priced():
     assert call["cost_usd"] == pytest.approx(10 / 1e6 * 1.0 + 5 / 1e6 * 2.0)
 
 
-def test_cost_null_when_unpriced(store):
+def test_cost_null_when_unpriced():
+    store = TelemetryStore(":memory:", price_in_per_mtok=0.0, price_out_per_mtok=0.0)
     MeteredLLM(UsageLLM(), store).summarize("t")
     assert _calls(store)[0]["cost_usd"] is None
 
@@ -235,7 +236,7 @@ def test_spend_since():
 
 
 def test_spend_since_treats_unpriced_calls_as_zero():
-    store = TelemetryStore(":memory:")  # no prices -> cost is NULL
+    store = TelemetryStore(":memory:", price_in_per_mtok=0.0, price_out_per_mtok=0.0)
     MeteredLLM(UsageLLM(), store).summarize("t")
     assert store.spend_since("2020-01-01T00:00:00+00:00") == 0.0
 

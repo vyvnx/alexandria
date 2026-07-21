@@ -58,11 +58,9 @@ class Settings(BaseSettings):
     learned_topics_top_n: int = 10
 
     # Cost telemetry (roadmap F1): executions + per-call ledger, its own SQLite
-    # file next to the graph db. Prices are $ per 1M tokens for the configured
-    # model; 0 (unset) ⇒ cost reported as tokens only.
+    # file next to the graph db. $/1M-token prices live in telemetry.py as
+    # constants (PRICE_IN_PER_MTOK / PRICE_OUT_PER_MTOK), not here.
     executions_db_path: str = "../data/executions.db"
-    price_in_per_mtok: float = 0.0
-    price_out_per_mtok: float = 0.0
 
     # Budgets (roadmap F3): $ ceilings on metered llm spend; 0 ⇒ off. Over
     # budget the worker defers queued ingests until the window resets (or

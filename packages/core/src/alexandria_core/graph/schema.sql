@@ -3,7 +3,9 @@ CREATE TABLE IF NOT EXISTS nodes (
   kind        TEXT NOT NULL,
   name        TEXT NOT NULL,
   data        TEXT,                 -- JSON
-  created_at  TEXT NOT NULL
+  created_at  TEXT NOT NULL,
+  x           REAL,                 -- settled layout position; NULL = unplaced
+  y           REAL
 );
 CREATE TABLE IF NOT EXISTS edges (
   id             INTEGER PRIMARY KEY,

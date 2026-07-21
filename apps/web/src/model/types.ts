@@ -34,6 +34,9 @@ export interface WireNode {
   name: string;
   /** only on `/node/{id}` — `/graph` ships the trimmed shape (roadmap B1) */
   data?: Record<string, unknown>;
+  /** settled layout position, present once saved server-side; absent = unplaced */
+  x?: number;
+  y?: number;
 }
 
 export interface WireEdge {

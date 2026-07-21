@@ -59,13 +59,17 @@ export function buildGraph(
   const total = data.nodes.length;
 
   data.nodes.forEach((n, i) => {
-    const pos = seedPosition(i, total);
+    // server-settled position wins; spiral seed only for unplaced newcomers.
+    // `placed` drives the engine's layout decision: no unplaced nodes → no FA2.
+    const placed = n.x != null && n.y != null;
+    const pos = placed ? { x: n.x!, y: n.y! } : seedPosition(i, total);
     graph.addNode(String(n.id), {
       label: n.name,
       kind: n.kind,
       color: kindColor(n.kind),
       x: pos.x,
       y: pos.y,
+      placed,
       size: 4, // refined by revisit-weight below
     });
   });
@@ -129,6 +133,20 @@ export function sizeByWeight(
     const w = graph.getNodeAttribute(node, "weight") as number;
     const t = maxW > 0 ? Math.sqrt(w / maxW) : 0; // sqrt compresses the long tail
     graph.setNodeAttribute(node, "size", min + t * (max - min));
+  });
+}
+
+/** Copy settled x/y from a previous graph onto every surviving node of the
+    next one, so a data refresh nudges the layout instead of re-scrambling it
+    (seed positions are index-based and shift when the node list changes).
+    Carried nodes count as `placed`; new nodes keep their seed and FA2 pulls
+    them in from there. */
+export function carryPositions(prev: Graph, next: Graph): void {
+  next.forEachNode((node) => {
+    if (!prev.hasNode(node)) return;
+    next.setNodeAttribute(node, "x", prev.getNodeAttribute(node, "x"));
+    next.setNodeAttribute(node, "y", prev.getNodeAttribute(node, "y"));
+    next.setNodeAttribute(node, "placed", true);
   });
 }
 

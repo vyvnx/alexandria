@@ -45,6 +45,11 @@ class GraphStore:
         cols = [r[1] for r in self.conn.execute("PRAGMA table_info(sources)")]
         if cols and "content_hash" not in cols:
             self.conn.execute("ALTER TABLE sources ADD COLUMN content_hash TEXT")
+        # lazy migration: settled layout positions (server-side positions spec)
+        node_cols = [r[1] for r in self.conn.execute("PRAGMA table_info(nodes)")]
+        if node_cols and "x" not in node_cols:
+            self.conn.execute("ALTER TABLE nodes ADD COLUMN x REAL")
+            self.conn.execute("ALTER TABLE nodes ADD COLUMN y REAL")
         sql = (resources.files("alexandria_core.graph") / "schema.sql").read_text()
         self.conn.executescript(sql)
         if self.vec_available:
@@ -65,7 +70,19 @@ class GraphStore:
 
     def _row_to_node(self, r: sqlite3.Row) -> Node:
         return Node(id=r["id"], kind=r["kind"], name=r["name"],
-                    data=json.loads(r["data"] or "{}"), created_at=r["created_at"])
+                    data=json.loads(r["data"] or "{}"), created_at=r["created_at"],
+                    x=r["x"], y=r["y"])
+
+    def set_positions(self, positions: dict[int, tuple[float, float]]) -> int:
+        """Bulk-write settled layout positions, rounded to 2 decimals (keeps the
+        graph wire light). Unknown ids are ignored — a node can be dismissed
+        between the client's layout settling and the save arriving."""
+        cur = self.conn.executemany(
+            "UPDATE nodes SET x=?, y=? WHERE id=?",
+            [(round(x, 2), round(y, 2), nid) for nid, (x, y) in positions.items()],
+        )
+        self.conn.commit()
+        return cur.rowcount
 
     def get_node(self, node_id: int) -> Node | None:
         r = self.conn.execute("SELECT * FROM nodes WHERE id=?", (node_id,)).fetchone()

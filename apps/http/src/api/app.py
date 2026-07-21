@@ -48,8 +48,13 @@ class IngestBody(BaseModel):
     visual: bool = False
 
 
+class PositionsBody(BaseModel):
+    # node id → [x, y], as settled by the client's layout
+    positions: dict[int, tuple[float, float]]
+
+
 def create_app(store=None, llm=None, embedder=None, settings: Settings | None = None,
-               vision=None, registry=None) -> FastAPI:
+               vision=None, registry=None, telemetry=None) -> FastAPI:
     configure_logging()
     settings = settings or get_settings()
     if store is None:
@@ -59,9 +64,7 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
     registry = registry or IntakeRegistry(settings.db_path)
     # every provider (injected fakes included) is metered through the telemetry
     # seam (F1): per-call task/tokens/cost/duration, grouped by ingest execution
-    telemetry = TelemetryStore(settings.executions_db_path,
-                               price_in_per_mtok=settings.price_in_per_mtok,
-                               price_out_per_mtok=settings.price_out_per_mtok)
+    telemetry = telemetry or TelemetryStore(settings.executions_db_path)
 
     # budgets (roadmap F3): metered spend against daily/monthly ceilings
     def _window_start(kind: str) -> str:
@@ -314,7 +317,8 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         return {"removed": topic_id}
 
     @api.get("/graph")
-    def graph(node_id: int | None = None, k: int = 2):
+    def graph(node_id: int | None = None, k: int = 2,
+              bbox: str | None = None, lod: int | None = None):
         if node_id is not None:
             ids = set(store.reach(node_id, k))
             nodes = [n for n in store.all_nodes() if n.id in ids]
@@ -322,13 +326,52 @@ def create_app(store=None, llm=None, embedder=None, settings: Settings | None = 
         else:
             nodes = store.all_nodes()
             edges = store.all_edges()
+
+        # viewport query (frontend spec §19 Phase 3): placed nodes inside the
+        # box, PLUS every unplaced node — those have no location yet and must
+        # reach a client to be placed.
+        # ponytail: python filter over all_nodes; SQL WHERE + R-tree when counts demand
+        if bbox is not None:
+            try:
+                minx, miny, maxx, maxy = (float(v) for v in bbox.split(","))
+            except ValueError:
+                raise HTTPException(422, "bbox must be 'minx,miny,maxx,maxy'")
+            nodes = [n for n in nodes
+                     if n.x is None or (minx <= n.x <= maxx and miny <= n.y <= maxy)]
+
+        # LOD = keep the N most-connected nodes (degree order).
+        # ponytail: importance-capped LOD, not cluster supernodes — those need
+        # server-side community detection (Phase 3)
+        if lod is not None:
+            if lod < 1:
+                raise HTTPException(422, "lod must be >= 1")
+            degree: dict[int, int] = {}
+            for e in edges:
+                degree[e.src_id] = degree.get(e.src_id, 0) + 1
+                degree[e.dst_id] = degree.get(e.dst_id, 0) + 1
+            nodes = sorted(nodes, key=lambda n: degree.get(n.id, 0), reverse=True)[:lod]
+
+        if bbox is not None or lod is not None:
+            kept = {n.id for n in nodes}
+            edges = [e for e in edges if e.src_id in kept and e.dst_id in kept]
+
         return {
             # trimmed wire shape (roadmap B1): no data blob — the dossier
-            # lazy-loads it via /node/{id}
-            "nodes": [{"id": n.id, "kind": n.kind, "name": n.name} for n in nodes],
+            # lazy-loads it via /node/{id}. x/y ship once a layout has settled.
+            "nodes": [{"id": n.id, "kind": n.kind, "name": n.name,
+                       **({"x": n.x, "y": n.y} if n.x is not None else {})}
+                      for n in nodes],
             "edges": [{"src": e.src_id, "dst": e.dst_id, "type": e.type, "weight": e.weight}
                       for e in edges],
         }
+
+    @api.post("/graph/positions")
+    def save_positions(body: PositionsBody):
+        # phase-0 scaffolding: the client lays out and writes back; retires
+        # when the backend precomputes layout (Phase 3)
+        saved = store.set_positions(
+            {nid: (x, y) for nid, (x, y) in body.positions.items()})
+        return {"saved": saved}
 
     @api.get("/search")
     def search(q: str):

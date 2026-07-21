@@ -13,6 +13,8 @@ class Node:
     name: str
     data: dict = field(default_factory=dict)   # entity.type, description, etc.
     created_at: str | None = None
+    x: float | None = None   # settled layout position; None = unplaced
+    y: float | None = None
 
 
 @dataclass

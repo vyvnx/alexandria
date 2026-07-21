@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildGraph, edgeColor, edgeKey, kindColor } from "./graph";
+import { buildGraph, carryPositions, edgeColor, edgeKey, kindColor } from "./graph";
 import type { GraphResponse } from "./types";
 
 const sample: GraphResponse = {
@@ -128,6 +128,50 @@ describe("sizeByWeight (revisit-weight)", () => {
     const spread = (g: ReturnType<typeof buildGraph>) =>
       (g.getNodeAttribute("10", "size") as number) - (g.getNodeAttribute("11", "size") as number);
     expect(spread(wide)).toBeGreaterThan(spread(dflt));
+  });
+});
+
+describe("positions (server-side positions spec)", () => {
+  it("uses server x/y when present and flags the node placed", () => {
+    const g = buildGraph({
+      nodes: [
+        { id: 1, kind: "concept", name: "settled", data: {}, x: 12.5, y: -3 },
+        { id: 2, kind: "concept", name: "unplaced", data: {} },
+      ],
+      edges: [],
+    });
+    expect(g.getNodeAttribute("1", "x")).toBe(12.5);
+    expect(g.getNodeAttribute("1", "y")).toBe(-3);
+    expect(g.getNodeAttribute("1", "placed")).toBe(true);
+    expect(g.getNodeAttribute("2", "placed")).toBe(false);
+  });
+
+  it("carries settled positions over and marks them placed; new nodes keep seeds", () => {
+    const prev = buildGraph(sample);
+    prev.setNodeAttribute("2", "x", 42);
+    prev.setNodeAttribute("2", "y", -7);
+
+    // node 3 dropped, node 4 added — indices shift, seeds move
+    const next = buildGraph({
+      nodes: [
+        { id: 1, kind: "source", name: "An Article", data: {} },
+        { id: 2, kind: "entity", name: "Vaswani", data: {} },
+        { id: 4, kind: "concept", name: "transformers", data: {} },
+      ],
+      edges: [],
+    });
+    const seeded = {
+      x: next.getNodeAttribute("4", "x"),
+      y: next.getNodeAttribute("4", "y"),
+    };
+    carryPositions(prev, next);
+
+    expect(next.getNodeAttribute("2", "x")).toBe(42);
+    expect(next.getNodeAttribute("2", "y")).toBe(-7);
+    expect(next.getNodeAttribute("2", "placed")).toBe(true);
+    expect(next.getNodeAttribute("4", "x")).toBe(seeded.x);
+    expect(next.getNodeAttribute("4", "y")).toBe(seeded.y);
+    expect(next.getNodeAttribute("4", "placed")).toBe(false);
   });
 });
 

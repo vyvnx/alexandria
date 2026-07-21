@@ -62,6 +62,14 @@ export function App() {
     (id: NodeId | null) => {
       setSelectedId(id == null ? null : Number(id));
     },
+    // A layout settled — persist the sky so reloads skip the simulation.
+    // Fire-and-forget: a lost save is retried by the next settle.
+    (positions) => {
+      const payload: Record<number, [number, number]> = {};
+      for (const [id, p] of Object.entries(positions))
+        payload[Number(id)] = [p.x, p.y];
+      api.savePositions(payload).catch(() => undefined);
+    },
   );
 
   useEffect(() => {
